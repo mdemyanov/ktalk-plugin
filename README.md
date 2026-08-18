@@ -37,9 +37,14 @@ ktalk --help
 Плагин обнаруживает отсутствие или устаревание пакета сам (ADR-014) и показывает команду
 установки. Выполнить установку за вас он может только по явной санкции:
 
-    bash <путь к плагину>/scripts/ktalk-onboard.sh grant install    # выдать санкцию (только в терминале)
-    bash <путь к плагину>/scripts/ktalk-onboard.sh status           # проверить состояние
-    bash <путь к плагину>/scripts/ktalk-onboard.sh revoke install   # отозвать
+    bash <путь к плагину>/scripts/ktalk-onboard.sh check             # состояние пакета: PATH, uv, версия
+    bash <путь к плагину>/scripts/ktalk-onboard.sh grant install     # выдать санкцию (только в терминале)
+    bash <путь к плагину>/scripts/ktalk-onboard.sh install           # установить/обновить по санкции
+    bash <путь к плагину>/scripts/ktalk-onboard.sh status            # какие санкции выданы
+    bash <путь к плагину>/scripts/ktalk-onboard.sh revoke install    # отозвать
+
+После `install` полезно повторить `check`: `install` возвращает 0 только если после запуска
+менеджера версия действительно не ниже минимальной, иначе 11.
 
 Санкция хранится в `${XDG_CONFIG_HOME:-$HOME/.config}/ktalk/onboarding.toml` (права 0600) и
 действует на всю машину. Санкция на установку не разрешает обновление — для него нужна отдельная

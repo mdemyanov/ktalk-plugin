@@ -182,14 +182,19 @@ run_clean() { # run_clean <команда...> — запуск без секре
   )
 }
 
+RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
+
 run_install() { # run_install <текст команды для пользователя> <команда...>
+  # Результат кладётся в RI_* — печать JSON остаётся за install_report, чтобы на
+  # любом исходе (включая постусловие FR-31) в stdout был ровно один объект.
   local cmd_text="$1"; shift
-  local out1 rc1 out2='' rc2='' retried=0
+  local out1 rc1 out2='' rc2=''
+  RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
 
   out1="$(run_clean "$@" 2>&1)"; rc1=$?
 
   if [ "$rc1" -ne 0 ] && is_network_error "$out1"; then
-    retried=1
+    RI_RETRIED=1
     if [ "$JSON" -ne 1 ]; then
       printf 'Попытка 1:\n%s\n' "$out1"
       printf 'Сетевая ошибка, повтор через %s с.\n' "$RETRY_DELAY"
@@ -201,27 +206,53 @@ run_install() { # run_install <текст команды для пользова
     fi
   fi
 
-  local final_rc
-  if [ "$retried" -eq 1 ]; then final_rc="$rc2"; else final_rc="$rc1"; fi
-
-  if [ "$JSON" -eq 1 ]; then
-    local status_str
-    if [ "$final_rc" -eq 0 ]; then status_str=ok; else status_str=install_failed; fi
-    if [ "$retried" -eq 1 ]; then
-      printf '{"status":"%s","install_command":"%s","attempts":2,"return_code":%s,"uv_output":"%s","first_attempt_output":"%s"}\n' \
-        "$status_str" "$(json_escape "$cmd_text")" "$final_rc" "$(json_escape "$out2")" "$(json_escape "$out1")"
-    else
-      printf '{"status":"%s","install_command":"%s","attempts":1,"return_code":%s,"uv_output":"%s"}\n' \
-        "$status_str" "$(json_escape "$cmd_text")" "$final_rc" "$(json_escape "$out1")"
-    fi
+  if [ "$RI_RETRIED" -eq 1 ]; then
+    RI_RC="$rc2"; RI_OUT="$out2"; RI_FIRST_OUT="$out1"
   else
-    if [ "$retried" -ne 1 ]; then
-      printf '%s\n' "$out1"
-    fi
-    printf 'Команда: %s\nКод возврата: %s\n' "$cmd_text" "$final_rc"
+    RI_RC="$rc1"; RI_OUT="$out1"; RI_FIRST_OUT=''
   fi
 
-  [ "$final_rc" -eq 0 ] || return "$E_INSTALL_FAILED"
+  if [ "$JSON" -ne 1 ]; then
+    if [ "$RI_RETRIED" -ne 1 ]; then
+      printf '%s\n' "$out1"
+    fi
+    printf 'Команда: %s\nКод возврата: %s\n' "$cmd_text" "$RI_RC"
+  fi
+
+  [ "$RI_RC" -eq 0 ] || return "$E_INSTALL_FAILED"
+  return "$E_OK"
+}
+
+install_report() { # install_report <status> <installed> <min> <message> <cmd_text>
+  # Тот же набор полей, что у report(), плюс телеметрия запуска менеджера пакетов.
+  if [ "$JSON" -eq 1 ]; then
+    local attempts=1 tail=''
+    if [ "$RI_RETRIED" -eq 1 ]; then
+      attempts=2
+      tail="$(printf ',"first_attempt_output":"%s"' "$(json_escape "$RI_FIRST_OUT")")"
+    fi
+    printf '{"status":"%s","installed_version":"%s","min_version":"%s","install_command":"%s","attempts":%s,"return_code":%s,"uv_output":"%s"%s,"message":"%s"}\n' \
+      "$(json_escape "$1")" "$(json_escape "$2")" "$(json_escape "$3")" "$(json_escape "$5")" \
+      "$attempts" "$RI_RC" "$(json_escape "$RI_OUT")" "$tail" "$(json_escape "$4")"
+  else
+    printf '%s\n' "$4"
+  fi
+}
+
+finish_install() { # finish_install <min> <текст команды> — постусловие установки (FR-31)
+  # Код возврата менеджера пакетов не является доказательством совместимости:
+  # `uv tool upgrade` печатает «Nothing to upgrade» с кодом 0, а индекс может
+  # отдавать версию ниже минимальной. Постусловие перечитывает версию.
+  local installed
+  hash -r 2>/dev/null || true
+  installed="$(installed_version)" || installed=""
+  if [ -z "$installed" ] || ! version_ge "$installed" "$1"; then
+    install_report outdated "$installed" "$1" \
+      "Версия пакета (${installed:-неопределима}) ниже минимально совместимой $1. Обновление: $UPDATE_CMD_TEXT" \
+      "$UPDATE_CMD_TEXT"
+    return "$E_OUTDATED"
+  fi
+  install_report ok "$installed" "$1" "Пакет ktalk-mcp $installed установлен, версия совместима." "$2"
   return "$E_OK"
 }
 
@@ -247,7 +278,13 @@ cmd_install() {
         "$UPDATE_CMD_TEXT"
       return "$E_NO_UPDATE_SANCTION"
     fi
-    run_install "$UPDATE_CMD_TEXT" "${UPDATE_CMD[@]}"
+    if ! run_install "$UPDATE_CMD_TEXT" "${UPDATE_CMD[@]}"; then
+      install_report install_failed "$installed" "$min" \
+        "Команда «${UPDATE_CMD_TEXT}» завершилась с кодом $RI_RC. Состояние системы не изменено." \
+        "$UPDATE_CMD_TEXT"
+      return "$E_INSTALL_FAILED"
+    fi
+    finish_install "$min" "$UPDATE_CMD_TEXT"
     return $?
   fi
   if ! sanction_granted install; then
@@ -255,7 +292,13 @@ cmd_install() {
       "Санкции на автоматическую установку нет. Установите сами: $INSTALL_CMD_TEXT — или выдайте санкцию: bash ${BASH_SOURCE[0]} grant install"
     return "$E_NO_SANCTION"
   fi
-  run_install "$INSTALL_CMD_TEXT" "${INSTALL_CMD[@]}"
+  if ! run_install "$INSTALL_CMD_TEXT" "${INSTALL_CMD[@]}"; then
+    install_report install_failed "" "$min" \
+      "Команда «${INSTALL_CMD_TEXT}» завершилась с кодом $RI_RC. Состояние системы не изменено." \
+      "$INSTALL_CMD_TEXT"
+    return "$E_INSTALL_FAILED"
+  fi
+  finish_install "$min" "$INSTALL_CMD_TEXT"
 }
 
 main() {
