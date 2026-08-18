@@ -1,0 +1,11 @@
+{
+  "name": "ktalk-plugins",
+  "owner": { "name": "mdemyanov" },
+  "plugins": [
+    {
+      "name": "ktalk",
+      "source": "./",
+      "description": "Claude Code plugin: обработка записей встреч Контур.Толк (реестр, оценка качества, чтение транскриптов/саммари)"
+    }
+  ]
+}
