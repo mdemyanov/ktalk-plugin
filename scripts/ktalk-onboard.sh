@@ -84,6 +84,69 @@ cmd_check() {
   return "$E_OK"
 }
 
+sanction_granted() { # sanction_granted install|update
+  [ -f "$SANCTION_FILE" ] || return 1
+  grep -Eq "^allow_$1[[:space:]]*=[[:space:]]*true[[:space:]]*\$" "$SANCTION_FILE"
+}
+
+sanction_json() {
+  local i u
+  sanction_granted install && i=true || i=false
+  sanction_granted update && u=true || u=false
+  printf '{"install":%s,"update":%s}' "$i" "$u"
+}
+
+cmd_status() {
+  if [ "$JSON" -eq 1 ]; then
+    printf '{"status":"ok","sanction":%s,"sanction_file":"%s"}\n' "$(sanction_json)" "$SANCTION_FILE"
+  else
+    local i u
+    sanction_granted install && i="есть" || i="нет"
+    sanction_granted update && u="есть" || u="нет"
+    printf 'Санкция на установку: %s\nСанкция на обновление: %s\nФайл: %s\n' "$i" "$u" "$SANCTION_FILE"
+  fi
+  return "$E_OK"
+}
+
+set_key() { # set_key <install|update> <true|false>
+  local tmp
+  mkdir -p "$CONFIG_DIR" && chmod 700 "$CONFIG_DIR" || return "$E_INTERNAL"
+  tmp="$(mktemp "$CONFIG_DIR/.onboarding.XXXXXX")" || return "$E_INTERNAL"
+  {
+    grep -Ev "^allow_$1[[:space:]]*=" "$SANCTION_FILE" 2>/dev/null
+    printf 'allow_%s = %s\n' "$1" "$2"
+  } > "$tmp"
+  chmod 600 "$tmp" && mv "$tmp" "$SANCTION_FILE" || return "$E_INTERNAL"
+  return "$E_OK"
+}
+
+cmd_grant() {
+  case "${1:-}" in
+    install|update) ;;
+    *) printf 'Укажите, что разрешаете: grant install | grant update\n' >&2; return "$E_INTERNAL" ;;
+  esac
+  if [ ! -t 0 ]; then
+    printf 'Санкция выдаётся только в терминале. Запустите вручную:\n  bash %s grant %s\n' \
+      "${BASH_SOURCE[0]}" "$1" >&2
+    return "$E_NO_TTY"
+  fi
+  set_key "$1" true || return "$E_INTERNAL"
+  printf 'Санкция "%s" выдана. Файл: %s\nОтзыв: bash %s revoke %s\n' \
+    "$1" "$SANCTION_FILE" "${BASH_SOURCE[0]}" "$1"
+  return "$E_OK"
+}
+
+cmd_revoke() {
+  case "${1:-}" in
+    install|update) ;;
+    *) printf 'Укажите, что отзываете: revoke install | revoke update\n' >&2; return "$E_INTERNAL" ;;
+  esac
+  [ -f "$SANCTION_FILE" ] || return "$E_OK"
+  set_key "$1" false || return "$E_INTERNAL"
+  printf 'Санкция "%s" отозвана.\n' "$1"
+  return "$E_OK"
+}
+
 main() {
   local cmd="${1:-}"; shift || true
   local rest=()
@@ -95,6 +158,9 @@ main() {
   done
   case "$cmd" in
     check) cmd_check ;;
+    status) cmd_status ;;
+    grant) cmd_grant "${rest[0]:-}" ;;
+    revoke) cmd_revoke "${rest[0]:-}" ;;
     *)
       printf 'Использование: ktalk-onboard.sh {check|install|grant|revoke|status} [--json]\n' >&2
       return "$E_INTERNAL" ;;

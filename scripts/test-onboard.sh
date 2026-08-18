@@ -56,5 +56,38 @@ OUT="$("$SCRIPT" check --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "check --json: валидный JSON"
 
+# 8. нет файла санкции → status сообщает отсутствие, код 0
+make_env
+OUT="$("$SCRIPT" status --json 2>/dev/null)"; check_eq 0 $? "status: без файла код 0"
+printf '%s' "$OUT" | grep -q '"install":false' ; check_eq 0 $? "status: install=false без файла"
+
+# 9. корректный файл → санкция видна
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+"$SCRIPT" status --json 2>/dev/null | grep -q '"install":true'
+check_eq 0 $? "status: allow_install = true распознан"
+
+# 10. мусор в файле → fail-closed
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install=maybe\nallow_install : true\n<<<\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+"$SCRIPT" status --json 2>/dev/null | grep -q '"install":false'
+check_eq 0 $? "status: битый файл → санкции нет"
+
+# 11. grant без TTY → 33 и файл не создан
+make_env
+"$SCRIPT" grant install </dev/null >/dev/null 2>&1; check_eq 33 $? "grant без TTY → 33"
+[ -f "$XDG_CONFIG_HOME/ktalk/onboarding.toml" ]; check_eq 1 $? "grant без TTY не создал файл"
+
+# 12. revoke снимает ключ без TTY
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+"$SCRIPT" revoke install >/dev/null 2>&1; check_eq 0 $? "revoke: код 0"
+"$SCRIPT" status --json 2>/dev/null | grep -q '"install":false'
+check_eq 0 $? "revoke: санкция снята"
+
+# 13. неизвестный ключ санкции → 20
+make_env
+"$SCRIPT" grant everything </dev/null >/dev/null 2>&1; check_eq 20 $? "grant с неверным ключом → 20"
+
 printf '\nPASS: %s  FAIL: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
