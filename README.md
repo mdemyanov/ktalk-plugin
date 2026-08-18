@@ -8,6 +8,19 @@
 устанавливаемом пакете `ktalk-mcp`, здесь — только промты и объявление
 MCP-сервера, без секретов и без встроенных путей конкретного проекта.
 
+## Установка плагина
+
+Marketplace — git-источник, репозиторий этого плагина:
+
+```
+/plugin marketplace add https://doc-hub.gitlab.yandexcloud.net/tools-ai/ktalk-plugin.git
+/plugin install ktalk@ktalk-plugins
+```
+
+Обновление — `/plugin marketplace update ktalk-plugins`. Плагин версионируется
+отдельно от пакета `ktalk-mcp` (ADR-012 §4): совместимость версий не
+навязывается манифестом, предусловие ниже проверяется вручную.
+
 ## Предусловие: пакет `ktalk-mcp` в PATH
 
 Навыки вызывают контур через CLI `ktalk` (ADR-012 §2а), MCP-сервер `ktalk`
