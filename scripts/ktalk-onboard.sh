@@ -9,6 +9,8 @@ CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ktalk"
 SANCTION_FILE="$CONFIG_DIR/onboarding.toml"
 INSTALL_CMD=(uv tool install ktalk-mcp)
 INSTALL_CMD_TEXT="uv tool install ktalk-mcp"
+UPDATE_CMD=(uv tool upgrade ktalk-mcp)
+UPDATE_CMD_TEXT="uv tool upgrade ktalk-mcp"
 
 E_OK=0; E_MISSING_CLI=10; E_OUTDATED=11; E_MISSING_UV=12; E_INTERNAL=20
 E_NO_SANCTION=30; E_INSTALL_FAILED=31; E_NO_UPDATE_SANCTION=32; E_NO_TTY=33
@@ -147,6 +149,60 @@ cmd_revoke() {
   return "$E_OK"
 }
 
+RETRY_DELAY="${KTALK_ONBOARD_RETRY_DELAY:-3}"
+
+is_network_error() {
+  printf '%s' "$1" | grep -Eqi \
+    'failed to fetch|connection|timed out|timeout|temporary failure in name resolution|network|could not resolve'
+}
+
+run_install() { # run_install <текст команды для пользователя> <команда...>
+  local cmd_text="$1"; shift
+  local out rc
+  out="$("$@" 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ] && is_network_error "$out"; then
+    printf 'Сетевая ошибка, повтор через %s с.\n' "$RETRY_DELAY"
+    sleep "$RETRY_DELAY"
+    out="$("$@" 2>&1)"; rc=$?
+  fi
+  printf '%s\n' "$out"
+  printf 'Команда: %s\nКод возврата: %s\n' "$cmd_text" "$rc"
+  [ "$rc" -eq 0 ] || return "$E_INSTALL_FAILED"
+  return "$E_OK"
+}
+
+cmd_install() {
+  local min installed
+  if ! min="$(min_version)"; then
+    report error "" "" "Не прочитан compat.json плагина — переустановите плагин."
+    return "$E_INTERNAL"
+  fi
+  if ! command -v uv >/dev/null 2>&1; then
+    report missing_uv "" "$min" "Не найден uv. Установите uv, затем: $INSTALL_CMD_TEXT"
+    return "$E_MISSING_UV"
+  fi
+  if command -v ktalk >/dev/null 2>&1; then
+    installed="$(installed_version)" || installed=""
+    if [ -n "$installed" ] && version_ge "$installed" "$min"; then
+      report ok "$installed" "$min" "Пакет ktalk-mcp $installed уже установлен — установка не требуется."
+      return "$E_OK"
+    fi
+    if ! sanction_granted update; then
+      report no_update_sanction "$installed" "$min" \
+        "Версия ${installed:-неопределима} ниже $min. Обновление требует отдельной санкции: bash ${BASH_SOURCE[0]} grant update"
+      return "$E_NO_UPDATE_SANCTION"
+    fi
+    run_install "$UPDATE_CMD_TEXT" "${UPDATE_CMD[@]}"
+    return $?
+  fi
+  if ! sanction_granted install; then
+    report no_sanction "" "$min" \
+      "Санкции на автоматическую установку нет. Установите сами: $INSTALL_CMD_TEXT — или выдайте санкцию: bash ${BASH_SOURCE[0]} grant install"
+    return "$E_NO_SANCTION"
+  fi
+  run_install "$INSTALL_CMD_TEXT" "${INSTALL_CMD[@]}"
+}
+
 main() {
   local cmd="${1:-}"; shift || true
   local rest=()
@@ -158,6 +214,7 @@ main() {
   done
   case "$cmd" in
     check) cmd_check ;;
+    install) cmd_install ;;
     status) cmd_status ;;
     grant) cmd_grant "${rest[0]:-}" ;;
     revoke) cmd_revoke "${rest[0]:-}" ;;
