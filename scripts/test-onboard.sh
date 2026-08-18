@@ -180,5 +180,20 @@ OUT="$("$SCRIPT" install --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "install --json: валидный JSON при кавычках и переводах строк в выводе uv"
 
+# 26. NFR-19: секреты KTalk не доходят до дочернего процесса и не попадают в вывод.
+# Стаб uv дампит своё окружение — худший случай ретрансляции (SEC-004, MAJ-01).
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+printf '#!/usr/bin/env bash\nenv | sort\nexit 0\n' > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
+FIXTURE_TOKEN="SYNTHETIC-ONBOARD-TOKEN-0000000000"
+OUT="$(KTALK_SESSION_TOKEN="$FIXTURE_TOKEN" KTALK_PERSONAL_API_KEY="$FIXTURE_TOKEN" \
+       KTALK_BASE_URL="https://example.invalid" "$SCRIPT" install --json 2>&1)"
+printf '%s' "$OUT" | grep -q "$FIXTURE_TOKEN"
+check_eq 1 $? "install --json: значение токена не попадает в вывод"
+OUT="$(KTALK_SESSION_TOKEN="$FIXTURE_TOKEN" KTALK_PERSONAL_API_KEY="$FIXTURE_TOKEN" \
+       KTALK_BASE_URL="https://example.invalid" "$SCRIPT" install 2>&1)"
+printf '%s' "$OUT" | grep -q "$FIXTURE_TOKEN"
+check_eq 1 $? "install: значение токена не попадает в текстовый вывод"
+
 printf '\nPASS: %s  FAIL: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -171,11 +171,22 @@ is_network_error() {
     'failed to fetch|connection|timed out|timeout|temporary failure in name resolution|network|could not resolve'
 }
 
+run_clean() { # run_clean <команда...> — запуск без секретов KTalk в окружении (NFR-19)
+  # Вывод менеджера пакетов ретранслируется в диалог агента целиком. Менеджеру
+  # секреты KTalk не нужны, поэтому они снимаются с дочернего процесса: любой его
+  # вывод перестаёт быть каналом для значения токена по построению, а не по
+  # предположению о том, что uv не печатает окружение (SEC-004, MAJ-01).
+  (
+    unset KTALK_SESSION_TOKEN KTALK_PERSONAL_API_KEY KTALK_BASE_URL
+    "$@"
+  )
+}
+
 run_install() { # run_install <текст команды для пользователя> <команда...>
   local cmd_text="$1"; shift
   local out1 rc1 out2='' rc2='' retried=0
 
-  out1="$("$@" 2>&1)"; rc1=$?
+  out1="$(run_clean "$@" 2>&1)"; rc1=$?
 
   if [ "$rc1" -ne 0 ] && is_network_error "$out1"; then
     retried=1
@@ -184,7 +195,7 @@ run_install() { # run_install <текст команды для пользова
       printf 'Сетевая ошибка, повтор через %s с.\n' "$RETRY_DELAY"
     fi
     sleep "$RETRY_DELAY"
-    out2="$("$@" 2>&1)"; rc2=$?
+    out2="$(run_clean "$@" 2>&1)"; rc2=$?
     if [ "$JSON" -ne 1 ]; then
       printf 'Попытка 2:\n%s\n' "$out2"
     fi
