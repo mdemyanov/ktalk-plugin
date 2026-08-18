@@ -182,14 +182,14 @@ run_clean() { # run_clean <команда...> — запуск без секре
   )
 }
 
-RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
+RI_RAN=0; RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
 
 run_install() { # run_install <текст команды для пользователя> <команда...>
   # Результат кладётся в RI_* — печать JSON остаётся за install_report, чтобы на
   # любом исходе (включая постусловие FR-31) в stdout был ровно один объект.
   local cmd_text="$1"; shift
   local out1 rc1 out2='' rc2=''
-  RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
+  RI_RAN=1; RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
 
   out1="$(run_clean "$@" 2>&1)"; rc1=$?
 
@@ -225,15 +225,24 @@ run_install() { # run_install <текст команды для пользова
 
 install_report() { # install_report <status> <installed> <min> <message> <cmd_text>
   # Тот же набор полей, что у report(), плюс телеметрия запуска менеджера пакетов.
+  # Поля attempts/return_code/uv_output печатаются на ЛЮБОМ исходе (DEV-007 дефект 2,
+  # ADR-014-onboarding-spec §1) — включая ветки, где менеджер не запускался (нет
+  # санкции, нет uv, нужна отдельная санкция на обновление, пакет уже свежий):
+  # attempts=0, return_code=null, uv_output="" — честные значения «менеджер не
+  # запускался», не пропуск полей.
   if [ "$JSON" -eq 1 ]; then
-    local attempts=1 tail=''
-    if [ "$RI_RETRIED" -eq 1 ]; then
-      attempts=2
-      tail="$(printf ',"first_attempt_output":"%s"' "$(json_escape "$RI_FIRST_OUT")")"
+    local attempts=0 rc_field=null tail=''
+    if [ "$RI_RAN" -eq 1 ]; then
+      attempts=1
+      rc_field="$RI_RC"
+      if [ "$RI_RETRIED" -eq 1 ]; then
+        attempts=2
+        tail="$(printf ',"first_attempt_output":"%s"' "$(json_escape "$RI_FIRST_OUT")")"
+      fi
     fi
     printf '{"status":"%s","installed_version":"%s","min_version":"%s","install_command":"%s","attempts":%s,"return_code":%s,"uv_output":"%s"%s,"message":"%s"}\n' \
       "$(json_escape "$1")" "$(json_escape "$2")" "$(json_escape "$3")" "$(json_escape "$5")" \
-      "$attempts" "$RI_RC" "$(json_escape "$RI_OUT")" "$tail" "$(json_escape "$4")"
+      "$attempts" "$rc_field" "$(json_escape "$RI_OUT")" "$tail" "$(json_escape "$4")"
   else
     printf '%s\n' "$4"
   fi
@@ -243,8 +252,26 @@ finish_install() { # finish_install <min> <текст команды> — пос
   # Код возврата менеджера пакетов не является доказательством совместимости:
   # `uv tool upgrade` печатает «Nothing to upgrade» с кодом 0, а индекс может
   # отдавать версию ниже минимальной. Постусловие перечитывает версию.
+  #
+  # Предикат выровнен с cmd_check (DEV-007, дефект 1), а не наоборот: успех install
+  # требует того же — `command -v ktalk` — что и первый гейт check, не только
+  # installed_version() с fallback на `uv tool list`. Без этого install мог вернуть 0,
+  # когда пакет поставлен вне PATH (типовой случай ~/.local/bin не в PATH) — уже
+  # следующий check в цепочке check → install → check отдавал бы 10, расходясь с
+  # «успехом», о котором только что отчитался install.
   local installed
   hash -r 2>/dev/null || true
+  if ! command -v ktalk >/dev/null 2>&1; then
+    if command -v uv >/dev/null 2>&1; then
+      installed="$(installed_version)" || installed=""
+    else
+      installed=""
+    fi
+    install_report missing_cli "$installed" "$1" \
+      "Менеджер пакетов сообщает об установке${installed:+ (версия $installed)}, но команда ktalk не резолвится через PATH. Добавьте каталог инструментов uv (обычно ~/.local/bin) в PATH и повторите: $2" \
+      "$2"
+    return "$E_MISSING_CLI"
+  fi
   installed="$(installed_version)" || installed=""
   if [ -z "$installed" ] || ! version_ge "$installed" "$1"; then
     install_report outdated "$installed" "$1" \
@@ -258,22 +285,26 @@ finish_install() { # finish_install <min> <текст команды> — пос
 
 cmd_install() {
   local min installed
+  # RI_RAN сброшен явно (DEV-007 дефект 2): все выходы из этой функции идут через
+  # install_report, а не report, чтобы attempts/return_code/uv_output были в JSON на
+  # любом исходе, включая ветки, где менеджер пакетов не запускается вовсе.
+  RI_RAN=0; RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
   if ! min="$(min_version)"; then
-    report error "" "" "Не прочитан compat.json плагина — переустановите плагин."
+    install_report error "" "" "Не прочитан compat.json плагина — переустановите плагин." "$INSTALL_CMD_TEXT"
     return "$E_INTERNAL"
   fi
   if ! command -v uv >/dev/null 2>&1; then
-    report missing_uv "" "$min" "Не найден uv. Установите uv, затем: $INSTALL_CMD_TEXT"
+    install_report missing_uv "" "$min" "Не найден uv. Установите uv, затем: $INSTALL_CMD_TEXT" "$INSTALL_CMD_TEXT"
     return "$E_MISSING_UV"
   fi
   if command -v ktalk >/dev/null 2>&1; then
     installed="$(installed_version)" || installed=""
     if [ -n "$installed" ] && version_ge "$installed" "$min"; then
-      report ok "$installed" "$min" "Пакет ktalk-mcp $installed уже установлен — установка не требуется."
+      install_report ok "$installed" "$min" "Пакет ktalk-mcp $installed уже установлен — установка не требуется." "$INSTALL_CMD_TEXT"
       return "$E_OK"
     fi
     if ! sanction_granted update; then
-      report no_update_sanction "$installed" "$min" \
+      install_report no_update_sanction "$installed" "$min" \
         "Версия ${installed:-неопределима} ниже $min. Обновление требует отдельной санкции: bash ${BASH_SOURCE[0]} grant update" \
         "$UPDATE_CMD_TEXT"
       return "$E_NO_UPDATE_SANCTION"
@@ -288,8 +319,9 @@ cmd_install() {
     return $?
   fi
   if ! sanction_granted install; then
-    report no_sanction "" "$min" \
-      "Санкции на автоматическую установку нет. Установите сами: $INSTALL_CMD_TEXT — или выдайте санкцию: bash ${BASH_SOURCE[0]} grant install"
+    install_report no_sanction "" "$min" \
+      "Санкции на автоматическую установку нет. Установите сами: $INSTALL_CMD_TEXT — или выдайте санкцию: bash ${BASH_SOURCE[0]} grant install" \
+      "$INSTALL_CMD_TEXT"
     return "$E_NO_SANCTION"
   fi
   if ! run_install "$INSTALL_CMD_TEXT" "${INSTALL_CMD[@]}"; then
