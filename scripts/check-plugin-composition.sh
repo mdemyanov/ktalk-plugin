@@ -44,6 +44,11 @@ check "секрет со значением" 'KTALK_(SESSION_TOKEN|PERSONAL_API_
 # Внутренний домен хозяина.
 check "внутренний домен ktalk.ru" 'ktalk\.ru'
 
+# MCP-имена операций встреч — промт-поверхность обязана называть только CLI-команды
+# (ADR-012 §2а, ADR-015 «Решение» п.1: MCP заморожен для этой поверхности, FR-32…FR-36).
+check "MCP-имя операции встреч вместо CLI" \
+  'ktalk_list_calendar|ktalk_get_room|ktalk_search_contacts|ktalk_preview_meeting|ktalk_preview_cancel_meeting'
+
 if [ "$fail" -ne 0 ]; then
     echo
     echo "Проверка состава плагина: FAIL"
