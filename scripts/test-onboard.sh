@@ -112,8 +112,10 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # 17. устаревшая версия без санкции на обновление → 32
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.4.0"; stub uv 0 ""
+stub ktalk 0 "ktalk-mcp 0.4.0"
+printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 32 $? "install: устарел, нет allow_update → 32"
+[ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: устарел, нет allow_update — uv не вызывался"
 
 # 18. сетевая ошибка → ровно две попытки, код 31
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
@@ -151,6 +153,32 @@ printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >> "%s/uv-args"\nexit 0\n' "$T
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: устарел, есть allow_update → 0"
 grep -q '^upgrade$' "$TMP/uv-args"; check_eq 0 $? "install: ветка обновления вызывает uv tool upgrade"
 grep -qx 'install' "$TMP/uv-args"; check_eq 1 $? "install: ветка обновления не вызывает uv tool install"
+
+# 23. install --json на успехе → валидный JSON
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+printf '#!/usr/bin/env bash\necho "Installed 1 executable: ktalk"\nexit 0\n' > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
+OUT="$("$SCRIPT" install --json 2>/dev/null)"
+printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
+check_eq 0 $? "install --json: валидный JSON на успехе"
+
+# 24. install --json на провале (код 31) → валидный JSON
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+printf '#!/usr/bin/env bash\necho "error: Permission denied"\nexit 1\n' > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
+OUT="$("$SCRIPT" install --json 2>/dev/null)"
+check_eq 31 $? "install --json: код возврата 31 сохранён"
+printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
+check_eq 0 $? "install --json: валидный JSON на провале"
+
+# 25. install --json на выводе uv с кавычкой и переводом строки → валидный JSON
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+printf '#!/usr/bin/env bash\nprintf '"'"'strange "quoted" line\\nsecond line\\n'"'"'\nexit 0\n' \
+  > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
+OUT="$("$SCRIPT" install --json 2>/dev/null)"
+printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
+check_eq 0 $? "install --json: валидный JSON при кавычках и переводах строк в выводе uv"
 
 printf '\nPASS: %s  FAIL: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

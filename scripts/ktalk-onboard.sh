@@ -53,10 +53,21 @@ version_ge() { # version_ge A B → 0, если A >= B
   return 0
 }
 
-report() { # report <status> <installed> <min> <message>
+json_escape() { # json_escape <строка> — экранирует \, ", CR, LF, TAB для JSON-строки
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+report() { # report <status> <installed> <min> <message> [cmd_text]
+  local cmd_text="${5:-$INSTALL_CMD_TEXT}"
   if [ "$JSON" -eq 1 ]; then
     printf '{"status":"%s","installed_version":"%s","min_version":"%s","install_command":"%s","message":"%s"}\n' \
-      "$1" "$2" "$3" "$INSTALL_CMD_TEXT" "$4"
+      "$(json_escape "$1")" "$(json_escape "$2")" "$(json_escape "$3")" "$(json_escape "$cmd_text")" "$(json_escape "$4")"
   else
     printf '%s\n' "$4"
   fi
@@ -79,7 +90,8 @@ cmd_check() {
   installed="$(installed_version)" || installed=""
   if [ -z "$installed" ] || ! version_ge "$installed" "$min"; then
     report outdated "$installed" "$min" \
-      "Версия пакета (${installed:-неопределима}) ниже минимально совместимой $min. Обновление: uv tool upgrade ktalk-mcp"
+      "Версия пакета (${installed:-неопределима}) ниже минимально совместимой $min. Обновление: $UPDATE_CMD_TEXT" \
+      "$UPDATE_CMD_TEXT"
     return "$E_OUTDATED"
   fi
   report ok "$installed" "$min" "Пакет ktalk-mcp $installed установлен, версия совместима."
@@ -150,6 +162,9 @@ cmd_revoke() {
 }
 
 RETRY_DELAY="${KTALK_ONBOARD_RETRY_DELAY:-3}"
+case "$RETRY_DELAY" in
+  ''|*[!0-9.]*) RETRY_DELAY=3 ;;
+esac
 
 is_network_error() {
   printf '%s' "$1" | grep -Eqi \
@@ -158,16 +173,44 @@ is_network_error() {
 
 run_install() { # run_install <текст команды для пользователя> <команда...>
   local cmd_text="$1"; shift
-  local out rc
-  out="$("$@" 2>&1)"; rc=$?
-  if [ "$rc" -ne 0 ] && is_network_error "$out"; then
-    printf 'Сетевая ошибка, повтор через %s с.\n' "$RETRY_DELAY"
+  local out1 rc1 out2='' rc2='' retried=0
+
+  out1="$("$@" 2>&1)"; rc1=$?
+
+  if [ "$rc1" -ne 0 ] && is_network_error "$out1"; then
+    retried=1
+    if [ "$JSON" -ne 1 ]; then
+      printf 'Попытка 1:\n%s\n' "$out1"
+      printf 'Сетевая ошибка, повтор через %s с.\n' "$RETRY_DELAY"
+    fi
     sleep "$RETRY_DELAY"
-    out="$("$@" 2>&1)"; rc=$?
+    out2="$("$@" 2>&1)"; rc2=$?
+    if [ "$JSON" -ne 1 ]; then
+      printf 'Попытка 2:\n%s\n' "$out2"
+    fi
   fi
-  printf '%s\n' "$out"
-  printf 'Команда: %s\nКод возврата: %s\n' "$cmd_text" "$rc"
-  [ "$rc" -eq 0 ] || return "$E_INSTALL_FAILED"
+
+  local final_rc
+  if [ "$retried" -eq 1 ]; then final_rc="$rc2"; else final_rc="$rc1"; fi
+
+  if [ "$JSON" -eq 1 ]; then
+    local status_str
+    if [ "$final_rc" -eq 0 ]; then status_str=ok; else status_str=install_failed; fi
+    if [ "$retried" -eq 1 ]; then
+      printf '{"status":"%s","install_command":"%s","attempts":2,"return_code":%s,"uv_output":"%s","first_attempt_output":"%s"}\n' \
+        "$status_str" "$(json_escape "$cmd_text")" "$final_rc" "$(json_escape "$out2")" "$(json_escape "$out1")"
+    else
+      printf '{"status":"%s","install_command":"%s","attempts":1,"return_code":%s,"uv_output":"%s"}\n' \
+        "$status_str" "$(json_escape "$cmd_text")" "$final_rc" "$(json_escape "$out1")"
+    fi
+  else
+    if [ "$retried" -ne 1 ]; then
+      printf '%s\n' "$out1"
+    fi
+    printf 'Команда: %s\nКод возврата: %s\n' "$cmd_text" "$final_rc"
+  fi
+
+  [ "$final_rc" -eq 0 ] || return "$E_INSTALL_FAILED"
   return "$E_OK"
 }
 
@@ -189,7 +232,8 @@ cmd_install() {
     fi
     if ! sanction_granted update; then
       report no_update_sanction "$installed" "$min" \
-        "Версия ${installed:-неопределима} ниже $min. Обновление требует отдельной санкции: bash ${BASH_SOURCE[0]} grant update"
+        "Версия ${installed:-неопределима} ниже $min. Обновление требует отдельной санкции: bash ${BASH_SOURCE[0]} grant update" \
+        "$UPDATE_CMD_TEXT"
       return "$E_NO_UPDATE_SANCTION"
     fi
     run_install "$UPDATE_CMD_TEXT" "${UPDATE_CMD[@]}"
