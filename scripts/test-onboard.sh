@@ -66,11 +66,11 @@ make_env
 
 # 3. версия ниже минимальной → 11
 make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.4.0"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.4.0 < 0.9.0 → 11"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.4.0 < 0.9.1 → 11"
 
 # 4. версия достаточна → 0
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.9.0"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 0.9.0 → 0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.9.1"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 0.9.1 → 0"
 
 # 5. версия выше минимальной → 0
 make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 1.2.3"
@@ -79,11 +79,11 @@ make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 1.2.3"
 # 6. --version не поддержан, версия берётся из uv tool list
 make_env
 printf '#!/usr/bin/env bash\nexit 2\n' > "$TMP/bin/ktalk"; chmod +x "$TMP/bin/ktalk"
-stub uv 0 "ktalk-mcp v0.9.0"
+stub uv 0 "ktalk-mcp v0.9.1"
 "$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: fallback на uv tool list"
 
 # 7. --json печатает валидный JSON
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.9.0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.9.1"
 OUT="$("$SCRIPT" check --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "check --json: валидный JSON"
@@ -130,13 +130,13 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # 15. санкция есть, установка успешна → 0
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 0.9.0
+stub_uv_installs 0.9.1
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: с санкцией → 0"
 
 # 16. пакет уже свежий → 0 и uv не вызывался (идемпотентность)
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.9.0"
+stub ktalk 0 "ktalk-mcp 0.9.1"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: уже установлен → 0"
 [ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: уже установлен — uv не вызывался"
@@ -181,7 +181,7 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
 stub ktalk 0 "ktalk-mcp 0.4.0"
-stub_uv_installs 0.9.0 "Updated ktalk-mcp v0.4.0 -> v0.9.0"
+stub_uv_installs 0.9.1 "Updated ktalk-mcp v0.4.0 -> v0.9.1"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: устарел, есть allow_update → 0"
 grep -q '^upgrade$' "$TMP/uv-args"; check_eq 0 $? "install: ветка обновления вызывает uv tool upgrade"
 grep -qx 'install' "$TMP/uv-args"; check_eq 1 $? "install: ветка обновления не вызывает uv tool install"
@@ -189,7 +189,7 @@ grep -qx 'install' "$TMP/uv-args"; check_eq 1 $? "install: ветка обнов
 # 23. install --json на успехе → валидный JSON
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 0.9.0
+stub_uv_installs 0.9.1
 OUT="$("$SCRIPT" install --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "install --json: валидный JSON на успехе"
@@ -256,17 +256,17 @@ grep -q '^upgrade$' "$TMP/uv-args"; check_eq 0 $? "install: ветка обно�
 # 29 (FR-31). успешная установка совместимой версии → 0 и статус ok
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 0.9.0
-OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install: индекс отдал 0.9.0 → 0"
+stub_uv_installs 0.9.1
+OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install: индекс отдал 0.9.1 → 0"
 printf '%s' "$OUT" | grep -q '"status":"ok"'; check_eq 0 $? "install --json: статус ok при успехе"
-printf '%s' "$OUT" | grep -q '"installed_version":"0.9.0"'; check_eq 0 $? "install --json: installed_version при успехе"
+printf '%s' "$OUT" | grep -q '"installed_version":"0.9.1"'; check_eq 0 $? "install --json: installed_version при успехе"
 
 # 30 (DEV-007 дефект 1). uv tool list подтверждает версию, но ktalk не резолвится через
 # PATH (типовой случай ~/.local/bin не в PATH) — install не вправе молча сообщать успех;
 # постусловие install обязано использовать тот же предикат, что check.
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs_off_path 0.9.0
+stub_uv_installs_off_path 0.9.1
 OUT="$("$SCRIPT" install 2>&1)"; RC=$?
 check_eq 10 "$RC" "install: ktalk вне PATH после установки → 10, не молчаливый успех"
 printf '%s' "$OUT" | grep -qi 'path'; check_eq 0 $? "install: сообщение об ошибке называет PATH"
@@ -307,7 +307,7 @@ check_json_telemetry "$OUT" 0 "install --json: нет allow_update — теле�
 
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.9.0"
+stub ktalk 0 "ktalk-mcp 0.9.1"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install --json: уже свежий → 0"
 check_json_telemetry "$OUT" 0 "install --json: уже свежий — телеметрия честная (uv не вызывался)"
