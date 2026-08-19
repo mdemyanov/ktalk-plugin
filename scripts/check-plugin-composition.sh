@@ -61,6 +61,40 @@ check "программный запуск sanction grant" \
 # Прежняя проверка «нет программного вызова *-confirm» снята сознательно: волна 6
 # сделала такой вызов штатным путём (ADR-016 отменяет ADR-005 §3 и ADR-015 §2).
 
+# NFR-25 (ADR-018 решение 7): правка промт-слоя анализа (agents/, skills/ktalk-registry/)
+# без синхронного подъёма version в .claude-plugin/plugin.json — провал. Сравнение идёт
+# с базой ветки (по умолчанию origin/main; переопределяется NFR25_BASE_REF — например,
+# для локального прогона без доступа к origin) против ТЕКУЩЕГО рабочего дерева (двухточечный
+# diff, не диапазон commit...HEAD) — гейт видит и незакоммиченную правку, актуально для
+# pre-commit; в CI после коммита рабочее дерево совпадает с HEAD, эквивалентно. Если база
+# недоступна в этом дереве — проверка пропускается с предупреждением, не падает (нет
+# ложного FAIL на shallow clone или detached HEAD без origin).
+check_prompt_version_sync() {
+    local base_ref="${NFR25_BASE_REF:-origin/main}"
+
+    if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
+        echo "SKIP: синхронизация версии промт-слоя (NFR-25) — база '$base_ref' недоступна"
+        return 0
+    fi
+
+    local prompt_diff
+    prompt_diff=$(git diff --name-only "$base_ref" -- agents/ skills/ktalk-registry/ 2>/dev/null || true)
+    if [ -z "$prompt_diff" ]; then
+        return 0
+    fi
+
+    local version_diff
+    version_diff=$(git diff --name-only "$base_ref" -- .claude-plugin/plugin.json 2>/dev/null || true)
+    if [ -z "$version_diff" ]; then
+        echo "FAIL: правка промт-слоя без подъёма version в .claude-plugin/plugin.json (NFR-25)"
+        echo "Изменённые файлы промт-слоя (относительно $base_ref):"
+        echo "$prompt_diff"
+        fail=1
+    fi
+}
+
+check_prompt_version_sync
+
 if [ "$fail" -ne 0 ]; then
     echo
     echo "Проверка состава плагина: FAIL"

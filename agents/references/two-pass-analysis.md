@@ -4,6 +4,9 @@ Reference-файл `ktalk-processor.md` (шаги 3.5/4 ядра). Пути и �
 ссылается этот файл, приходят из `ktalk config show --json` (шаг 0б ядра) — здесь
 не зашиты.
 
+Шкала `confidence` и защита от галлюцинаций — нормативно в
+`skills/ktalk-registry/references/analysis-quality.md` §6. Здесь не дублируется.
+
 ## Формат сохраняемого файла транскрипта
 
 ```markdown
