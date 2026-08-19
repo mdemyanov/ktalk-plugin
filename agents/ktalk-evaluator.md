@@ -48,10 +48,16 @@ date: <YYYY-MM-DD>
 meeting_type: <тип>
 transcript_path: <путь к транскрипту>
 protocol_path: <путь к протоколу>
-prompt_version: <версия промта>
+prompt_version: <версия промта — внутренний счётчик skill'а, `_meta.md`>
+plugin_version: <версия плагина — `version` из `.claude-plugin/plugin.json` на момент прогона>
 report_output_path: <куда сохранить отчёт>
 tracker_path: <путь к трекеру>
 ```
+
+`prompt_version` и `plugin_version` — два независимых счётчика (NFR-25 AC2), ни один не
+заменяет другой: `prompt_version` растёт при правке конкретного файла-источника,
+`plugin_version` — при любой правке `agents/`/`skills/ktalk-registry/`, не обязательно
+совпадающей по факту с ростом `prompt_version` в том же прогоне.
 
 ---
 
@@ -135,6 +141,7 @@ meeting_type: {meeting_type}
 protocol_path: "{protocol_path}"
 transcript_path: "{transcript_path}"
 prompt_version: "{prompt_version}"
+plugin_version: "{plugin_version}"
 scores:
   completeness: {N}
   accuracy: {N}
@@ -189,7 +196,11 @@ scores:
 Прочитать `{tracker_path}`, добавить строку в таблицу "Evaluations":
 
 ```
-| {eval_date short} | {recording_name short} | {meeting_type} | {completeness} | {accuracy} | {schema} | {actionability} | {confidence} | {overall} | {prompt_version} | [[{report_path short}]] |
+| {eval_date short} | {recording_name short} | {meeting_type} | {completeness} | {accuracy} | {schema} | {actionability} | {confidence} | {overall} | {plugin_version} | {prompt_version} | [[{report_path short}]] |
 ```
+
+Колонка версии плагина (`{plugin_version}`) — обязательна и предшествует
+`{prompt_version}` в строке (NFR-25 AC2): без неё A/B-сравнение прогонов по трекеру
+неотличимо от правки, не поднявшей версию плагина.
 
 Обновить Summary секцию (total evaluations, average score, best/worst).

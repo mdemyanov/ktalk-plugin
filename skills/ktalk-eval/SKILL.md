@@ -98,10 +98,16 @@ meeting_type: {тип}
 transcript_path: {путь к транскрипту}
 protocol_path: {путь к протоколу}
 prompt_version: {текущая версия из _meta.md}
+plugin_version: {текущая version из .claude-plugin/plugin.json}
 report_output_path: {путь отчёта, см. выше}
 tracker_path: {путь трекера — из routing/directories хозяина или запрошен у пользователя}
 """, run_in_background=true)
 ```
+
+`plugin_version` — обязательный параметр (NFR-25 AC2), не подставляется из
+`prompt_version`: читается отдельно из `.claude-plugin/plugin.json` (поле `version`)
+непосредственно перед запуском агента, чтобы отчёт и трекер фиксировали версию плагина
+на момент именно этого прогона.
 
 ### Шаг 4. Показать результат
 
@@ -120,6 +126,8 @@ tracker_path: {путь трекера — из routing/directories хозяин
 | Actionability | X/5 |
 | Confidence Usage | X/5 |
 | **Overall** | **X.XX** |
+
+Версия плагина прогона: {plugin_version} (`prompt_version`: {prompt_version})
 
 Трекер обновлён: {tracker_path}
 ```
