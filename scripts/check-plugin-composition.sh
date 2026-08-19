@@ -62,13 +62,16 @@ check "программный запуск sanction grant" \
 # сделала такой вызов штатным путём (ADR-016 отменяет ADR-005 §3 и ADR-015 §2).
 
 # NFR-25 (ADR-018 решение 7): правка промт-слоя анализа (agents/, skills/ktalk-registry/)
-# без синхронного подъёма version в .claude-plugin/plugin.json — провал. Сравнение идёт
-# с базой ветки (по умолчанию origin/main; переопределяется NFR25_BASE_REF — например,
-# для локального прогона без доступа к origin) против ТЕКУЩЕГО рабочего дерева (двухточечный
-# diff, не диапазон commit...HEAD) — гейт видит и незакоммиченную правку, актуально для
-# pre-commit; в CI после коммита рабочее дерево совпадает с HEAD, эквивалентно. Если база
-# недоступна в этом дереве — проверка пропускается с предупреждением, не падает (нет
-# ложного FAIL на shallow clone или detached HEAD без origin).
+# без подъёма minor-версии в .claude-plugin/plugin.json — провал. AC NFR-25 требует
+# буквально «minor-версия плагина поднята», не просто «файл изменился» и не любой рост —
+# правка одного лишь description или patch-инкремент (1.2.1→1.2.2) не проходит: patch
+# по семантике проекта — для правок вне промт-слоя (например, README), не для калибровки
+# поведения агента. Мажорный рост (2.0.0) тоже проходит — он строго превосходит minor.
+# Сравнение идёт с базой ветки (по умолчанию origin/main; переопределяется NFR25_BASE_REF)
+# против ТЕКУЩЕГО рабочего дерева (не диапазон commit...HEAD) — гейт видит и незакоммиченную
+# правку, актуально для pre-commit; в CI после коммита рабочее дерево совпадает с HEAD,
+# эквивалентно. Если база недоступна — проверка пропускается с предупреждением, не падает
+# (нет ложного FAIL на shallow clone или detached HEAD без origin).
 check_prompt_version_sync() {
     local base_ref="${NFR25_BASE_REF:-origin/main}"
 
@@ -83,10 +86,32 @@ check_prompt_version_sync() {
         return 0
     fi
 
-    local version_diff
-    version_diff=$(git diff --name-only "$base_ref" -- .claude-plugin/plugin.json 2>/dev/null || true)
-    if [ -z "$version_diff" ]; then
-        echo "FAIL: правка промт-слоя без подъёма version в .claude-plugin/plugin.json (NFR-25)"
+    local plugin_json=".claude-plugin/plugin.json"
+    local base_version cur_version
+    base_version=$(git show "${base_ref}:${plugin_json}" 2>/dev/null | grep -oE '"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+    cur_version=$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$plugin_json" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+
+    if [ -z "$base_version" ] || [ -z "$cur_version" ]; then
+        echo "FAIL: не удалось прочитать version из $plugin_json (база: '$base_version', рабочее дерево: '$cur_version') — NFR-25 не проверен"
+        fail=1
+        return
+    fi
+
+    local base_major base_minor cur_major cur_minor
+    IFS='.' read -r base_major base_minor _ <<< "$base_version"
+    IFS='.' read -r cur_major cur_minor _ <<< "$cur_version"
+
+    local minor_raised=0
+    if [ "$cur_major" -gt "$base_major" ]; then
+        minor_raised=1
+    elif [ "$cur_major" -eq "$base_major" ] && [ "$cur_minor" -gt "$base_minor" ]; then
+        minor_raised=1
+    fi
+
+    if [ "$minor_raised" -ne 1 ]; then
+        echo "FAIL: правка промт-слоя без подъёма minor-версии в $plugin_json (NFR-25)"
+        echo "  version в базе ($base_ref): $base_version"
+        echo "  version в рабочем дереве:  $cur_version"
         echo "Изменённые файлы промт-слоя (относительно $base_ref):"
         echo "$prompt_diff"
         fail=1
