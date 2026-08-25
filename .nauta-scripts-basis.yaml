@@ -1,0 +1,27 @@
+# .nauta-scripts-basis.yaml — пишет /nauta:sync-scripts (tools-ai/nauta). Не
+# редактируйте руками значения; секцию `skip:` — можно (ADR-030-spec §5/§6).
+nauta_version: "0.19.2"
+nauta_ref_sha: "010dd2384ae8eab02c3c2814aca87f9f9a1daa01"
+synced_at: "2026-08-25T11:33:25Z"
+delivery_complete: true
+files_count: 17
+files:
+  scripts/_apply_profile.py: "sha256:9e23416b46cf41747c5cda7c80c28c9d96ba286ca9cfa23e5c17dec43ece4871"
+  scripts/_apply_yaml_patch.py: "sha256:4ee8d9ed86225a19e5bb0cb8b6aa152382612b9e4a9611040227a317d10f450c"
+  scripts/_drift_check.py: "sha256:af64c61448f9d13ae2a7a333b6c6d9e1620c935c6341c54c131536c1e33ed6e4"
+  scripts/_init_helpers.py: "sha256:9bce78c39d04299413bd7e95f32589aa618435dadad5c0734815c98be4923283"
+  scripts/_resolve_agents.py: "sha256:ed6ac2a782c5cceff1fee0477f91c56134efbe29ea98e9750f959f80c65a60c3"
+  scripts/_validate_common.py: "sha256:4399631f667ec11ee655460200b96929f25b8d765fe2545a7c39002db04abef9"
+  scripts/apply-overlay.sh: "sha256:22c6ce991339ec0ed54160421a993110d9f2ea8bdd30492e9a3bc4eadc971fd8"
+  scripts/check-hooks-path.sh: "sha256:c7bfbb1d274d023190d4e945dcb5fb59bca41f6a6737898f424ad2c2864e1707"
+  scripts/check-readiness.sh: "sha256:61fd194f3c41c00555288705437088b9fc8c1d3d8d435383c188376b6e51f756"
+  scripts/check-status-drift.py: "sha256:07da5caa7deca2a60d0ae0c96e0d01215368121347ac31c8005bd09f1886cae2"
+  scripts/check.sh: "sha256:cdd95f47f14d1412d42066e9088962db74e703dba23585610791c91c030465a0"
+  scripts/id-check.sh: "sha256:ce629a672fe5c685992cb6a844b74c4641e642fd445ba741e129e57a6c30f490"
+  scripts/install-hooks.sh: "sha256:b0ff9b521bc09e1f7d0b2980158a20dc0d1b7739381927526a9c1ce31018f4c1"
+  scripts/test-check-id.sh: "sha256:e6ce8ee8b5dff5ec787a0208b51b1ef31200b358edceef5974a9999b7447e5d2"
+  scripts/validate-content.py: "sha256:9c4bb49ee4887dc01269ee3db12ad45aaeb2dfe031acc6576975e22c14b8231b"
+  scripts/validate-profile.py: "sha256:0ba0d08229010f51453920026fa05fb6b425f9d0056e066132312f43e1c7e1a7"
+  .githooks/pre-commit: "sha256:cf4b1a88b3fa8870d394b51b70858d055504620f8f4ed7fa220625bec3a3c4d6"
+skip_count: 0
+skip:

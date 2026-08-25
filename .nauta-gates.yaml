@@ -1,0 +1,133 @@
+# Конфигурация гейтов объёма (ADR-031 Д1 — носитель в корне проекта; ADR-032 — пороги).
+# Читатель — scripts/validate-content.py: _load_gates, check_prompt_layer_size_budget
+# (C14), gate_config_provenance_lines.
+#
+# Провижининг — bin/init.sh (DEV-013, NA-EPIC-01 Фаза 0 N4): создаётся один раз, там, где
+# файла ещё нет. Повторный `/nauta:init` НЕ трогает существующий файл — тот же протокол
+# «не разрушать чужое», что у корневого промт-слоя (CLAUDE.md/AGENTS.md, ADR-039). Ручная
+# правка порогов ниже переживает любой следующий прогон init.
+
+# C14 — корневой промт-слой: СУММА строк CLAUDE.md + AGENTS.md. Один количественный
+# признак без пары: контекстное окно тратится на длину независимо от структуры
+# (ADR-032 FR-008, code-and-prompt-size-budgets). Отсутствующий файл пары даёт 0, не
+# ошибку (FR-007). Порог 550 — канон capability `code-and-prompt-size-budgets`,
+# Requirement "Combined threshold for the root prompt layer".
+promptLayerSizeBudget:
+  thresholdLines: 550
+  severity: block
+
+# C11 — content/: парная метрика объём+структура на статью (ADR-018, capability
+# `content-size-budgets`). Сигнал — только когда ОБА признака сработали (BR-004): T
+# превышен И качественный признак провален (companion-спека отсутствует для ADR /
+# longest_run_without_structure >= qualityThreshold для остальных). Ключа по умолчанию
+# НЕТ: без него C11 — законный, но постоянный тихий skip (провенанс печатает "absent
+# (проверка не выполняется)", не "0 нарушений"). Раскомментируй и заполни свой каталог
+# типов, если хочешь, чтобы гейт реально проверял — тип без записи остаётся легитимным
+# статусом "T не измерен" (FR-003), не пробелом.
+#
+# Пороги ниже — ОРИЕНТИР этого репозитория (nauta), не норма: взяты из
+# content/40-architecture/ADR-018-content-size-budget-detector-spec.md §2.1/§2.4 (тот же
+# каталог типов, что несёт templates/content-scaffold/.doc-root.yaml — Требование,
+# Архитектура, ADR, Исследование; Runbook/Глоссарий/Прочее там же помечены "T не
+# измерен" и не имеют строки). Своё дерево — своя калибровка (percentile-процедура,
+# capability `content-size-budgets`, Requirement "Reproducibility of threshold
+# derivation").
+# sizeBudgets:
+#   - type: Требование
+#     thresholdLines: 300
+#     quality: longest_run_without_structure
+#     qualityThreshold: 100
+#     severity: warn
+#   - type: Архитектура
+#     thresholdLines: 750
+#     quality: longest_run_without_structure
+#     qualityThreshold: 150
+#     severity: warn
+#   - type: ADR
+#     thresholdLines: 150
+#     quality: companion-spec
+#     severity: block
+#   - type: Исследование
+#     thresholdLines: 500
+#     quality: longest_run_without_structure
+#     qualityThreshold: 200
+#     severity: warn
+# sizeBudgetGrandfathered: []
+#
+# РЕШЕНИЕ ktalk-plugin (2026-08-25): C11 остаётся absent ОСОЗНАННО, не по забывчивости.
+# Предмет объявлен (content/ есть), но корпус для калибровки пуст: `find content/ -name "*.md"`
+# даёт 8 файлов — 6 скаффолдов _index.md разделов, корневой _index.md и lessons-learned.md;
+# ни одной статьи с типом из каталога. Percentile-процедура (capability `content-size-budgets`,
+# Requirement "Reproducibility of threshold derivation") на пустом корпусе не воспроизводима,
+# а пороги донора выше — норма чужого дерева, не этого. Пересмотреть при появлении первой
+# статьи: тогда калибровать по своему корпусу и раскомментировать ключ.
+
+# C13 — код (.py/.groovy): пара "строки файла + длиннейшая top-level декларация", тот же
+# контракт BR-004, что C11 несёт для content/ (ADR-032, capability
+# `code-and-prompt-size-budgets`). Ключа по умолчанию НЕТ: без него C13 — законный, но
+# постоянный тихий skip. Раскомментируй, если хочешь, чтобы гейт реально проверял свой
+# код.
+#
+# Пороги ниже — ОРИЕНТИР этого репозитория (nauta), не норма: это ТЕ ЖЕ числа, что несёт
+# активный codeSizeBudgets корневого .nauta-gates.yaml этого дерева (600/650 строк,
+# качественный порог 600), и они дословно совпадают с capability
+# `code-and-prompt-size-budgets`, Requirement про порог для .py/.groovy и отдельный
+# порог 650 для test-файлов. Другой репозиторий — другая калибровка.
+# codeSizeBudgets:
+#   - extension: .py
+#     kind: prod
+#     thresholdLines: 600
+#     quality: longest_top_level_declaration
+#     qualityThreshold: 600
+#     severity: block
+#   - extension: .py
+#     kind: test
+#     thresholdLines: 650
+#     quality: longest_top_level_declaration
+#     qualityThreshold: 600
+#     severity: block
+#   - extension: .groovy
+#     kind: prod
+#     thresholdLines: 600
+#     quality: longest_top_level_declaration
+#     qualityThreshold: 600
+#     severity: block
+#   - extension: .groovy
+#     kind: test
+#     thresholdLines: 650
+#     quality: longest_top_level_declaration
+#     qualityThreshold: 600
+#     severity: block
+#
+# РЕШЕНИЕ ktalk-plugin (2026-08-25): C13 остаётся absent ОСОЗНАННО — предмета нет.
+# ADR-012 (тонкая обёртка) держит прикладной код в отдельном пакете ktalk-mcp; в дереве
+# плагина только промты и bash. Измерено: `find . -name "*.groovy"` → 0; все 9 файлов
+# `find . -name "*.py" -not -path "*/__pycache__/*"` заявлены .nauta-scripts-basis.yaml,
+# то есть это доставка nauta, а не код этого репозитория. Включить C13 значило бы мерить
+# чужую доставку порогом донора: scripts/validate-content.py — 1631 строка при пороге 600,
+# и правка недоступна (файл перезаписывается следующим /nauta:sync-scripts). Пересмотреть,
+# если в дереве появится собственный .py/.groovy.
+
+# C18 — rolePromptSizeBudget (agents/**/*.md, ADR-060). Ключа НЕТ: как и C11/C13, это
+# постоянный тихий skip. В отличие от них предмет здесь ЕСТЬ и измерим: `wc -l agents/**/*.md`
+# — 5 файлов, 69…258 строк (ktalk-evaluator.md 258, ktalk-processor.md 239). Калибровка по
+# этому корпусу не проводилась — открытый вопрос, а не обоснованный отказ.
+
+# Отказ от документарного контура (ADR-041 Д3). По умолчанию ключа НЕТ: умолчание — контур
+# есть, и его отсутствие на диске даёт ERROR с ненулевым кодом, а не тишину. Раскомментируй,
+# если проект сознательно живёт без content/: тогда C1-C12, C15, C16 не выполняются, а
+# C13/C14 (предмет — репозиторий, не каталог) продолжают работать. Значение, отличное от
+# `absent`, — error: неизвестное объявление не читается как «нарушений нет» (ADR-031 Д3).
+# documentaryCircuit: absent
+#
+# Чем этот ключ отличается от секции `skip:` в .nauta-scripts-basis.yaml. Это разные
+# предметы, а не два способа выключить одно и то же.
+#   documentaryCircuit: absent — про ПРЕДМЕТ проверки: каталога content/ у проекта нет и не
+#     планируется, проверять нечего. Гейт остаётся на месте, печатает одну строку об
+#     объявленном отказе и не меняет exit-код.
+#   skip: <путь> — про ДОСТАВКУ файла: «не перезаписывай мою копию этого скрипта при
+#     /nauta:sync-scripts». Проверку он НЕ выключает: путь в skip: заявляет позицию наравне
+#     с files:, и если файла в дереве нет, scripts/check.sh падает с ERROR
+#     (ADR-030-spec §5, ADR-037 Д1/§3).
+# Способа выключить гейт молча нет ни у того, ни у другого: законна только объявленная
+# тишина и только там, где объявлен отказ от самого предмета проверки (ADR-007 Д1).
