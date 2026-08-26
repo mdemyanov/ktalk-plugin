@@ -1,0 +1,65 @@
+# Конфигурация документарного контура (Gramax). Заводится `/nauta:init` один раз
+# (ADR-041 Д1); повторный прогон существующий файл не трогает.
+#
+# `code`, `title`, `description` — нейтральные значения: поправь руками под свой проект.
+# Перечни `properties` ниже читает `scripts/validate-content.py` (C4/C5): значение, которого
+# здесь нет, даёт error в статье. Роли плагина пишут `Тип контента`, `Фаза`, `Статус`,
+# `Audience` — все четыре объявлены.
+code: ktalk-plugin
+title: Документарный контур плагина ktalk
+description: Решения, требования, архитектура и уроки плагина ktalk (обёртка над ktalk-mcp)
+style: blue-green
+language: ru
+supportedLanguages:
+  - ru
+syntax: XML
+
+properties:
+  - name: Тип контента
+    type: Enum
+    style: blue
+    icon: file-text
+    values:
+      - Требование
+      - Архитектура
+      - ADR
+      - Спецификация
+      - Skill
+      - Agent
+      - Команда
+      - Runbook
+      - Исследование
+      - Глоссарий
+      - Прочее
+
+  - name: Фаза
+    type: Enum
+    style: green
+    icon: layers
+    values:
+      - PoC
+      - MVP
+      - Pilot
+      - Production
+
+  - name: Статус
+    type: Enum
+    style: orange
+    icon: check-circle
+    values:
+      - Draft
+      - Review
+      - Approved
+      - Superseded
+
+  - name: Audience
+    type: Enum
+    style: purple
+    icon: users
+    values:
+      - Public
+      - Internal
+      - Partner
+      - Candidate
+
+filterProperties: [Тип контента, Фаза, Статус]
