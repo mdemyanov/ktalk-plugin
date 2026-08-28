@@ -1,63 +1,71 @@
 ---
 name: ktalk-eval
 description: >
-  Оценка качества обработки записей Kontur Talk — сравнивает протоколы
-  с транскриптами, выставляет оценки по 5 измерениям, ведёт трекер.
-  Используй при "eval", "оценить качество", "проверить протокол",
+  Quality evaluation of processed Kontur Talk recordings — compares protocols against
+  transcripts, scores five dimensions, maintains a tracker.
+  Trigger phrases (Russian, matched against the owner's utterance — do not translate):
+  "eval", "оценить качество", "проверить протокол",
   "quality check ktalk", "ktalk eval", "оцени обработку".
 ---
 
-# Оценка качества обработки ktalk
+# Quality evaluation of ktalk processing
 
-## Предусловие: пакет ktalk-mcp
+**Language.** Reason in English. Every string shown to a human — and every string written into
+the host's vault — is Russian: reproduce the Russian literals in this file and in the
+referenced files verbatim, never translate or reword them (ADR-021).
 
-Перед первой командой `ktalk` в сессии выполни:
+## Precondition: the ktalk-mcp package
+
+Before the first `ktalk` command in a session, run:
 
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh check --json
 
-Код 0 — работай дальше. Ненулевой код — прочитай `${CLAUDE_PLUGIN_ROOT}/references/onboarding.md`
-и действуй по нему; не пропускай шаг молча и не выдумывай результат. Команды установки и выдачи
-санкции сам не выполняешь: `install` — только после того как санкция уже выдана пользователем,
-`grant` — никогда.
+Exit code 0 — carry on. A non-zero code — read
+`${CLAUDE_PLUGIN_ROOT}/references/onboarding.md` and follow it; never skip the step silently
+and never invent its result. You do not run the installation and sanction commands yourself:
+`install` only after the user has already granted the sanction, `grant` never.
 
-Skill для систематической оценки качества протоколов встреч, создаваемых агентом `ktalk-processor`.
+A skill for the systematic quality evaluation of meeting protocols produced by the
+`ktalk-processor` agent.
 
-Рубрика оценки: `references/eval-rubric.md`
+The scoring rubric: `references/eval-rubric.md`
 
-Раскладка проекта-хозяина (куда сохранять отчёт, где лежит трекер) не зашита в
-этот навык — читается командой `ktalk config show --json` (шаг 0).
+The host project's layout (where to save the report, where the tracker lives) is not
+hard-coded in this skill — it is read by `ktalk config show --json` (step 0).
 
-## Принципы
+## Principles
 
-1. **Post-hoc аудит** — оценивает уже обработанные записи (транскрипт + протокол существуют)
-2. **LLM-as-judge** — оценщик использует ту же модель, но с другой ролью (аудитор, не автор)
-3. **Concrete anchors** — оценки 1-5 привязаны к конкретным критериям, не к субъективным "хорошо/плохо"
-4. **Трекинг** — каждая оценка записывается в трекер для анализа трендов
+1. **Post-hoc audit** — it evaluates already processed recordings (both transcript and
+   protocol exist)
+2. **LLM-as-judge** — the evaluator uses the same model in a different role (auditor, not
+   author)
+3. **Concrete anchors** — the scores 1–5 are tied to concrete criteria, not to a subjective
+   "good/bad"
+4. **Tracking** — every score is written into the tracker for trend analysis
 
 ## Workflow
 
-### Шаг 0. Прочитать конфигурацию проекта-хозяина
+### Step 0. Read the host project's configuration
 
 ```
 ktalk config show --json
 ```
 
-Взять `routing.eval_report` (шаблон пути отчёта). Если ключ не объявлен —
-согласовать место сохранения отчёта с пользователем явно на шаге 3, не
-угадывать путь.
+Take `routing.eval_report` (the report path template). If the key is not declared, agree the
+report location with the user explicitly at step 3 — do not guess the path.
 
-### Шаг 1. Выбрать записи для оценки
+### Step 1. Choose the recordings to evaluate
 
-Если передан `recording_id` → использовать его.
+If a `recording_id` was passed → use it.
 
-Если нет — получить список обработанных записей через CLI (без парсинга
-markdown-зеркала реестра — это генерируемый файл):
+If not, get the list of processed recordings through the CLI (without parsing the markdown
+mirror of the registry — that is a generated file):
 
 ```
 ktalk list --status done --json
 ```
 
-Показать последние 10 записей из массива `recordings` (свежие сверху):
+Show the last 10 records from the `recordings` array (newest first):
 
 ```
 ## Оценка качества ktalk
@@ -69,25 +77,29 @@ ktalk list --status done --json
 Какие записи оценить? (номера, "все" или "нет")
 ```
 
-`ID_SHORT` — первые 8 символов `recording_id`. Тип — поле `meeting_type` (если `null`, показать `—`).
+`ID_SHORT` is the first 8 characters of `recording_id`. The type is the `meeting_type` field
+(if it is `null`, show `—`).
 
-### Шаг 2. Загрузить данные
+### Step 2. Load the data
 
-Для каждой выбранной записи:
-1. Взять пути транскрипта (`transcript_path`) и протокола (`protocol_path`) из JSON-записи (из `ktalk list` шага 1; для одиночного `recording_id` — `ktalk show <id> --json`)
-2. Прочитать транскрипт (Read tool)
-3. Прочитать протокол (Read tool)
-4. Прочитать рубрику: `references/eval-rubric.md`
+For each selected recording:
 
-Для chunked транскриптов (>50KB): загрузить саммари через
-`ktalk get-summary <recording_id> --json` + первые и последние 200 строк транскрипта.
+1. Take the transcript path (`transcript_path`) and the protocol path (`protocol_path`) from
+   the JSON record (from `ktalk list` in step 1; for a single `recording_id` —
+   `ktalk show <id> --json`)
+2. Read the transcript (the Read tool)
+3. Read the protocol (the Read tool)
+4. Read the rubric: `references/eval-rubric.md`
 
-### Шаг 3. Запустить оценку
+For chunked transcripts (>50KB): load the summary through
+`ktalk get-summary <recording_id> --json` plus the first and last 200 lines of the transcript.
 
-Определить путь отчёта: по шаблону `routing.eval_report` из шага 0
-(плейсхолдеры `{date}`/`{title}` подставляешь сам), иначе — спросить пользователя.
+### Step 3. Run the evaluation
 
-Запустить агента `ktalk-evaluator` в фоне:
+Determine the report path: from the `routing.eval_report` template of step 0 (you substitute
+the `{date}` and `{title}` placeholders yourself); otherwise ask the user.
+
+Launch the `ktalk-evaluator` agent in the background:
 
 ```
 Agent("ktalk-evaluator", prompt="""
@@ -104,14 +116,14 @@ tracker_path: {путь трекера — из routing/directories хозяин
 """, run_in_background=true)
 ```
 
-`plugin_version` — обязательный параметр (NFR-25 AC2), не подставляется из
-`prompt_version`: читается отдельно из `.claude-plugin/plugin.json` (поле `version`)
-непосредственно перед запуском агента, чтобы отчёт и трекер фиксировали версию плагина
-на момент именно этого прогона.
+`plugin_version` is a mandatory parameter (NFR-25 AC2) and is not derived from
+`prompt_version`: it is read separately from `.claude-plugin/plugin.json` (the `version`
+field) immediately before the agent is launched, so that the report and the tracker record
+the plugin version as of this particular run.
 
-### Шаг 4. Показать результат
+### Step 4. Show the result
 
-После завершения агента:
+Once the agent has finished:
 
 ```
 Оценка завершена: "{recording_name}" — {date}
@@ -132,10 +144,11 @@ tracker_path: {путь трекера — из routing/directories хозяин
 Трекер обновлён: {tracker_path}
 ```
 
-Если отчёт несёт секцию «Дефекты промта» (агент включает её только при готовых к issue
-случаях — порог 2+ записей на класс и полная пара цитат, см. `ktalk-evaluator.md`), показать
-её оператору отдельно от таблицы оценок, текстом целиком, и сослаться на `CONTRIBUTING.md`
-репозитория плагина для заведения issue:
+If the report carries a `Дефекты промта` section (the agent includes it only for cases ready
+to become an issue — the threshold of 2+ recordings per class and a complete pair of
+quotations, see `ktalk-evaluator.md`), show it to the operator separately from the score
+table, in full, as text, and point at the plugin repository's `CONTRIBUTING.md` for filing the
+issue:
 
 ```
 Дефекты промта, готовые к issue:
@@ -147,27 +160,32 @@ tracker_path: {путь трекера — из routing/directories хозяин
 публикует.
 ```
 
-## A/B режим
+## A/B mode
 
-Для сравнения двух версий промта:
+For comparing two prompt versions:
 
-### Шаг A1. Подготовка
-1. Убедиться что существуют версии инструкции анализа `v{A}` и `v{B}` (снапшоты — вне этого плагина, хранятся хозяином, если нужны)
-2. Выбрать записи для теста (рекомендуется 2-3)
+### Step A1. Preparation
 
-### Шаг A2. Обработка
-1. Обработать записи с версией A (если ещё нет протокола для v{A})
-2. Обработать те же записи с версией B → сохранить в `{original_path}.v{B}.md`
+1. Make sure the analysis-instruction versions `v{A}` and `v{B}` exist (snapshots live outside
+   this plugin, held by the host if they are needed)
+2. Choose the recordings for the test (2–3 recommended)
 
-### Шаг A3. Оценка
-1. Запустить eval на обоих протоколах
-2. Сгенерировать сравнительный отчёт (путь — по согласованию с пользователем, если хозяин не объявил отдельный маршрут для сравнительных отчётов)
+### Step A2. Processing
 
-## Связанные инструменты
+1. Process the recordings with version A (if there is no protocol for `v{A}` yet)
+2. Process the same recordings with version B → save to `{original_path}.v{B}.md`
 
-| Инструмент | Назначение |
-|-----------|-----------|
-| `ktalk config show --json` | Раскладка проекта-хозяина (маршруты отчётов) |
-| `ktalk-evaluator` агент | Выполняет 6-проходную оценку |
-| `references/eval-rubric.md` | Рубрика с anchor-описаниями |
-| `ktalk list --status done --json` | Источник done-записей: пути транскрипта/протокола, статусы |
+### Step A3. Evaluation
+
+1. Run the eval on both protocols
+2. Generate a comparison report (the path is agreed with the user if the host declared no
+   separate route for comparison reports)
+
+## Related tools
+
+| Tool | Purpose |
+|------|---------|
+| `ktalk config show --json` | The host project's layout (report routes) |
+| `ktalk-evaluator` agent | Runs the six-pass evaluation |
+| `references/eval-rubric.md` | The rubric with anchor descriptions |
+| `ktalk list --status done --json` | The source of `done` records: transcript/protocol paths, statuses |

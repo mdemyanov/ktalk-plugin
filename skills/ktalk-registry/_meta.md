@@ -3,7 +3,7 @@ id: ktalk-registry
 version: 4.0.0
 source: custom
 created: 2026-03-19
-updated: 2026-08-19
+updated: 2026-08-29
 author: mdemyanov
 status: active
 type: skill
@@ -13,93 +13,104 @@ prompt_version: 2
 
 # ktalk-registry
 
-## Назначение
+## Purpose
 
-- Синхронизация записей из Kontur Talk через CLI `ktalk`
-- Ведение реестра с отслеживанием статуса обработки
-- Обновление `ktalk_id` в профилях участников (если каталог профилей объявлен)
-- Сбор контекста (место сохранения, доп. вводные) от пользователя
-- Запуск фоновых агентов `ktalk-processor` для обработки встреч
+- Synchronise recordings from Kontur Talk through the `ktalk` CLI
+- Maintain the registry with processing-status tracking
+- Update `ktalk_id` in participant profiles (if a profile directory is declared)
+- Gather context (save location, extra input) from the user
+- Launch background `ktalk-processor` agents to process meetings
 
-## Компоненты
+## Components
 
-| Файл | Назначение |
-|------|-----------|
-| `SKILL.md` | Основной workflow оркестратора |
-| `references/registry-format.md` | Спецификация формата реестра |
-| `references/analysis-quality.md` | Инструкция по качеству анализа для ktalk-processor |
+| File | Purpose |
+|------|---------|
+| `SKILL.md` | The orchestrator's main workflow |
+| `references/registry-format.md` | Registry format specification |
+| `references/analysis-quality.md` | Analysis-quality instructions for ktalk-processor |
 
-## Связанные элементы
+## Related elements
 
-| Элемент | Тип | Путь (внутри плагина) |
-|---------|-----|------|
+| Element | Type | Path (inside the plugin) |
+|---------|------|--------------------------|
 | ktalk-processor | agent | `../../agents/ktalk-processor.md` |
 | ktalk-evaluator | agent | `../../agents/ktalk-evaluator.md` |
 | ktalk-eval | skill | `../ktalk-eval/SKILL.md` |
-| ktalk MCP | mcp | `.mcp.json` плагина (вторичный канал чтения контента, ADR-012 §2а хост-пакета) |
-| Реестр (данные) | data | путь резолвится `ktalk config show`, не зашит здесь |
-| Трекер качества (данные) | data | путь передаётся во входных параметрах `ktalk-eval` |
+| ktalk MCP | mcp | the plugin's `.mcp.json` (secondary content-reading channel, host package ADR-012 §2a) |
+| Registry (data) | data | the path is resolved by `ktalk config show`, not hard-coded here |
+| Quality tracker (data) | data | the path is passed in the input parameters of `ktalk-eval` |
 
 ## Changelog
 
-### 4.0.0 (2026-04-03, депараметризовано 2026-08-18, калиброван 2026-08-19)
-- Исправлены имена параметров MCP во всех вызовах (recording_id→recording_key, date_from→start_from, date_to→start_to, limit→top)
-- Явный `format="markdown"` во всех вызовах чтения контента
-- Условное обогащение — `get-recording` вызывается только если список записей не вернул длительность
-- Few-shot примеры качества (Appendix A в analysis-quality.md) — 3 пары ХОРОШО/ПЛОХО
-- Structured extraction checklist — 5 обязательных категорий
-- Фиксированная схема протокола — жёсткие колонки таблиц, новые frontmatter поля
-- Summary-driven selective chunking — макс. 60% чанков вместо 100%
-- Быстрый режим для коротких встреч (<15 мин) — однопроходный анализ
-- Memory-not-file предупреждение — анализ из загруженных данных, не из файла
-- Eval-фреймворк: skill `ktalk-eval`, agent `ktalk-evaluator`, рубрика по 5 измерениям
-- A/B тестирование: инфраструктура для сравнения версий промта
-- **2026-08-18 (волна 3, DEV-002 плагина):** перенос в плагин `ktalk`,
-  депараметризация путей проекта-хозяина (`ktalk config show --json` вместо
-  зашитых констант), переход вызовов реестра/чтения контента на CLI `ktalk`
-  как приоритетный канал (MCP — вторичный, только чтение контента); шаг
-  дайджестов новостей и снапшот `analysis-quality.v1.md` не перенесены —
-  вне границы плагина (ADR-012 §6 хост-пакета)
-- **2026-08-19 (DEV-014, ADR-018):** калибровка промт-слоя анализа по трём дефектам
-  замера `ktalk-eval` (Completeness, confidence, маркировка имён) — шаг 4.5 финальной
-  сверки прозы с таблицей «Договорённости» (`ktalk-processor.md`); единый маркер
-  `[ASR?]` для нерезолвленных имён и опциональная секция «Ключевые тезисы» для
-  `session` (`protocol-template.md`); пакетный резолвинг третьих лиц с кешем на
-  прогон (`analysis-quality.md` §1/§1а); пара калибровочных примеров 3а/3б взамен
-  ошибочного Примера 3 (условный запрос сам по себе не понижает confidence — решает
-  реплика-акцепт); разведение нормативности между `two-pass-analysis.md` (алгоритм
-  A–E) и `analysis-quality.md` (шкала confidence, приложение) — взаимные ссылки
-  вместо копий текста; версия плагина 1.2.1→1.3.0, `prompt_version` 1→2 (NFR-25)
+### 4.0.0 (2026-04-03, deparameterised 2026-08-18, calibrated 2026-08-19)
+
+- Fixed MCP parameter names in every call (recording_id→recording_key, date_from→start_from,
+  date_to→start_to, limit→top)
+- Explicit `format="markdown"` in every content-reading call
+- Conditional enrichment — `get-recording` is called only if the recording list returned no
+  duration
+- Few-shot quality examples (Appendix A in analysis-quality.md) — three `ХОРОШО`/`ПЛОХО` pairs
+- Structured extraction checklist — five mandatory categories
+- Fixed protocol schema — rigid table columns, new frontmatter fields
+- Summary-driven selective chunking — at most 60% of chunks instead of 100%
+- Fast path for short meetings (<15 min) — single-pass analysis
+- Memory-not-file warning — analyse from the loaded data, not from a file
+- Eval framework: the `ktalk-eval` skill, the `ktalk-evaluator` agent, a five-dimension rubric
+- A/B testing: infrastructure for comparing prompt versions
+- **2026-08-18 (wave 3, plugin DEV-002):** moved into the `ktalk` plugin; host project paths
+  deparameterised (`ktalk config show --json` instead of hard-coded constants); registry and
+  content-reading calls moved to the `ktalk` CLI as the primary channel (MCP is secondary,
+  content reading only); the news-digest step and the `analysis-quality.v1.md` snapshot were
+  not carried over — outside the plugin boundary (host package ADR-012 §6)
+- **2026-08-19 (DEV-014, ADR-018):** calibration of the analysis prompt layer against three
+  defects measured by `ktalk-eval` (Completeness, confidence, name marking) — step 4.5, the
+  final reconciliation of prose against the `Договорённости` table (`ktalk-processor.md`); a
+  single `[ASR?]` marker for unresolved names and the optional `Ключевые тезисы` section for
+  `session` (`protocol-template.md`); batch resolution of third parties with a per-run cache
+  (`analysis-quality.md` §1/§1a); the calibration pair of examples 3a/3b replacing the
+  erroneous Example 3 (a conditional request does not by itself lower confidence — the
+  accepting utterance decides); normativity separated between `two-pass-analysis.md` (the
+  A–E algorithm) and `analysis-quality.md` (the confidence scale, the appendix) — cross
+  references instead of copied text; plugin version 1.2.1→1.3.0, `prompt_version` 1→2
+  (NFR-25)
 
 ### Prompt versions
-- v1 (2026-03-19): Начальная версия analysis-quality.md
-- v2 (2026-04-03): Few-shot примеры, extraction checklist, фиксированная схема.
-  Примечание: frontmatter `prompt_version` до правки DEV-014 держал `1`, хотя
-  этот список уже фиксировал текущей v2 — расхождение обнаружено при этой
-  правке, не этой правкой создано; не устраняется ретроспективно, вне
-  периметра ADR-018.
-- v2, калибровано (2026-08-19, DEV-014/ADR-018), frontmatter `prompt_version: 2`:
-  шаг 4.5 финальной сверки, маркер `[ASR?]`, пакетный резолвинг третьих лиц,
-  примеры 3а/3б, разведение нормативности с `two-pass-analysis.md` (текущая)
+
+- v1 (2026-03-19): initial version of analysis-quality.md
+- v2 (2026-04-03): few-shot examples, extraction checklist, fixed schema.
+  Note: before the DEV-014 change the `prompt_version` frontmatter held `1`, although this
+  list already recorded v2 as current — the discrepancy was found by that change, not created
+  by it; it is not fixed retroactively, being outside the ADR-018 perimeter.
+- v2, calibrated (2026-08-19, DEV-014/ADR-018), frontmatter `prompt_version: 2`: step 4.5 of
+  the final reconciliation, the `[ASR?]` marker, batch resolution of third parties, examples
+  3a/3b, normativity separated from `two-pass-analysis.md` (current)
 
 ### 3.1.0 (2026-04-03)
-- Обновление до пакета `ktalk-mcp` v0.3.0
-- Агент `ktalk-processor`: поддержка чанкинга транскриптов (chunk/chunk_size)
-- Загрузка больших транскриптов по чанкам с автосборкой
-- Summary-first + On-demand анализ для chunked транскриптов
+
+- Updated to the `ktalk-mcp` package v0.3.0
+- The `ktalk-processor` agent: transcript chunking support (chunk/chunk_size)
+- Loading large transcripts by chunks with automatic assembly
+- Summary-first + on-demand analysis for chunked transcripts
 
 ### 3.0.0 (2026-04-03)
-- Миграция на пакет `ktalk-mcp` вместо кастомного HTTP MCP
-- Новые инструменты чтения: список записей, детали записи, транскрипт, саммари
-- Обогащение данных при отсутствии длительности в списке
-- Аутентификация: session token вместо bearer token
+
+- Migrated to the `ktalk-mcp` package instead of a custom HTTP MCP
+- New reading tools: recording list, recording details, transcript, summary
+- Data enrichment when the list holds no duration
+- Authentication: session token instead of bearer token
 
 ### 2.0.0 (2026-03-25)
-- Реестр переведён на генерируемое markdown-зеркало
-- Добавлено обновление `ktalk_id` в профилях участников
-- Добавлен сбор контекста от пользователя перед запуском агента
-- Запуск `ktalk-processor` агента в фоне (run_in_background=true)
-- Участники хранятся с полным именем и ktalk_id
+
+- The registry moved to a generated markdown mirror
+- Added updating of `ktalk_id` in participant profiles
+- Added context gathering from the user before the agent is launched
+- The `ktalk-processor` agent is launched in the background (run_in_background=true)
+- Participants are stored with their full name and ktalk_id
 
 ### 1.0.0 (2026-03-19)
-- Первая версия: синхронизация, реестр, архивация, экспирация
+
+- First version: synchronisation, registry, archiving, expiration
+
+### 2026-08-29 (issue #4, epic prompt-language-boundary)
+
+- Instructional prose translated to English; verbatim Russian output preserved (ADR-021)

@@ -8,4 +8,4 @@ title: Домен
 ## Внутри раздела
 
 - [glossary.md](glossary.md) — термины проекта одним файлом
-- `research/` — выжимки `/nauta:research` (требований и ADR не содержат)
+- [research/](research/_index.md) — выжимки `/nauta:research` (требований и ADR не содержат)

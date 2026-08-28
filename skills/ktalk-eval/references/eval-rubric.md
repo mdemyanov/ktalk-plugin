@@ -1,234 +1,260 @@
-# Рубрика оценки качества протоколов ktalk
+# Rubric for scoring ktalk protocol quality
 
-Используется агентом `ktalk-evaluator` при оценке каждого протокола.
+Used by the `ktalk-evaluator` agent when scoring each protocol.
 
-Ревизия ADR-018 (калибровка промт-слоя анализа, DEV-014): рубрика раньше не называла
-три системных дефекта явно — оператор находил их чтением, не рубрикой. Ниже они
-названы методом каждого измерения, не только общей формулировкой «полнота»/«точность».
+The ADR-018 revision (calibration of the analysis prompt layer, DEV-014): the rubric used not
+to name three systemic defects explicitly — the operator found them by reading, not by the
+rubric. Below they are named in the method of each dimension, not only in a general
+"completeness" / "accuracy" formulation.
 
----
-
-## 1. Completeness (Полнота) — 1-5
-
-Все ли решения, договорённости и обновления статуса из транскрипта попали в протокол?
-
-| Оценка | Критерий |
-|--------|---------|
-| 5 | Все решения, договорённости и обновления статуса из транскрипта в протоколе. Нет пропусков. Проза и таблица «Договорённости» согласованы (см. Метод). |
-| 4 | Одна незначительная тема или подпункт пропущены, но все решения/договорённости на месте. |
-| 3 | Одно решение или договорённость пропущены **или** названы прозой протокола (шапка, блок «Формат», основной текст), но не перенесены в таблицу «Договорённости» и не объяснены в «Открытых вопросах», **или** целая тема обсуждения раскрыта слишком поверхностно. |
-| 2 | Несколько решений или договорённостей пропущено. Целое направление обсуждения отсутствует. |
-| 1 | Протокол покрывает менее половины обсуждавшегося. |
-
-**Метод:**
-1. Систематический проход по транскрипту → перечислить ВСЕ решения/договорённости/статусы → проверить наличие в протоколе.
-2. **Внутренняя согласованность (проза vs таблица).** Отдельно от сверки с транскриптом —
-   сверка протокола самого с собой: для каждого обязательства, названного прозой протокола
-   (включая шапку/frontmatter и блок «Формат», не только основной текст), проверить, что
-   ему соответствует строка таблицы «Договорённости» либо явная запись в «Открытых
-   вопросах» о причине отсутствия. `commitments_count`, совпадающий с числом строк
-   таблицы, полноту **не подтверждает** — счётчик считает строки таблицы, он сходится и
-   тогда, когда обязательство осело в прозе и в таблицу не попало вовсе (наблюдалось:
-   «попутно — интерфейсный трек» в блоке «Формат» протокола status-встречи, строки в
-   таблице нет, `commitments_count` при этом верен).
-
-Решение (не растворять в п.1, не вводить отдельное измерение): шкала баллов не меняется —
-формулировка «одно решение или договорённость пропущены» уже покрывает этот случай на
-уровне 3/5, дефект был не в цифрах, а в том, что метод не указывал искать этот класс
-пропуска отдельно от сверки с транскриптом. Правка — метод, п.2 выше, плюс явное
-упоминание в критерии 3/5, чтобы оценщик не читал «пропущены» только как «отсутствуют
-в протоколе целиком».
+Russian literals in this file are quotations and protocol section names — the meeting is held
+in Russian and the protocol is written in Russian, so they are reproduced verbatim (ADR-021).
 
 ---
 
-## 2. Accuracy (Точность) — 1-5
+## 1. Completeness — 1–5
 
-Корректны ли извлечённые факты? Правильна ли атрибуция (кто что сказал)? Корректно ли
-резолвлены имена через каталог профилей?
+Did every decision, agreement and status update from the transcript reach the protocol?
 
-| Оценка | Критерий |
-|--------|---------|
-| 5 | Все факты соответствуют транскрипту. Все атрибуции верны. Нет выдуманного контента. Резолвинг имён (см. Метод) корректен. |
-| 4 | Незначительный перефраз, слегка смещающий смысл, но фактических ошибок нет. |
-| 3 | Одна фактическая ошибка, неверная атрибуция (не тот человек, число, дата), **или** маркировка имени, не соответствующая факту резолвинга (точное по каталогу имя помечено как неподтверждённое, либо искажённое ASR-имя оставлено чистым без маркера). |
-| 2 | Несколько фактических ошибок или значимая неверная атрибуция, меняющая смысл. |
-| 1 | Выдуманный контент (галлюцинация) — решения или договорённости, которых не было. |
+| Score | Criterion |
+|-------|-----------|
+| 5 | Every decision, agreement and status update from the transcript is in the protocol. Nothing is missing. The prose and the `Договорённости` table agree (see Method). |
+| 4 | One minor topic or sub-point is missing, but every decision and agreement is present. |
+| 3 | One decision or agreement is missing, **or** is named in the protocol's prose (the header, the `Формат` block, the body text) but was not carried into the `Договорённости` table and not explained in `Открытые вопросы`, **or** a whole discussion topic is covered too superficially. |
+| 2 | Several decisions or agreements are missing. A whole line of discussion is absent. |
+| 1 | The protocol covers less than half of what was discussed. |
 
-**Метод:** Spot-check каждого решения, договорённости, даты, числа, имени. Любой
-выдуманный пункт = автоматически 1.
+**Method:**
 
-**Резолвинг имён (FR-42 AC1).** Для каждого имени собственного (участника или третьего
-лица), встреченного в протоколе:
-- Резолвилось однозначно через каталог профилей проекта-хозяина → записано в
-  исправленной форме, **без** маркера `[ASR?]`. Резолвленное имя с маркером — дефект
-  (ложноположительная неопределённость), считать как фактическую ошибку.
-- Не резолвилось (нет в каталоге, каталог не объявлен, или неоднозначное частичное
-  совпадение) → помечено `[ASR?]`. Искажённое ASR-имя без маркера — дефект (пропущенная
-  неопределённость), считать как фактическую ошибку.
+1. A systematic pass over the transcript → list ALL decisions, agreements and statuses →
+   check each one is present in the protocol.
+2. **Internal consistency (prose vs table).** Separately from the comparison with the
+   transcript — compare the protocol against itself: for every commitment named in the
+   protocol's prose (including the header/frontmatter and the `Формат` block, not only the
+   body text), check that a row of the `Договорённости` table corresponds to it, or that
+   `Открытые вопросы` records explicitly why it is absent. A `commitments_count` matching the
+   number of table rows does **not** confirm completeness — the counter counts table rows, and
+   it also adds up when a commitment settled in the prose and never reached the table at all
+   (observed: `попутно — интерфейсный трек` in the `Формат` block of a status-meeting
+   protocol, with no row in the table and `commitments_count` nonetheless correct).
 
-Это ошибка содержания конкретного имени (Accuracy), не формата маркера как элемента
-схемы (это §3 ниже) — протокол, где один и тот же класс неопределённости размечен
-разнонаправленно (точное чистое имя помечено, искажённое — нет), не может получить 5,
-даже если остальные факты верны.
-
----
-
-## 3. Schema Consistency (Соответствие схеме) — 1-5
-
-Соответствует ли output ожидаемому шаблону протокола?
-
-| Оценка | Критерий |
-|--------|---------|
-| 5 | Все обязательные секции. Frontmatter полный и корректный. Confidence указаны. Таймкоды есть. Маркер `[ASR?]` — единой формы, не входит в `unclear_count`. «Ключевые тезисы» присутствует только при `meeting_type: session`. |
-| 4 | Незначительные проблемы форматирования (пропущена одна опциональная секция) **или** «Ключевые тезисы» присутствует в виде пустой секции-заглушки вместо полного отсутствия у не-`session`-типа. |
-| 3 | Одна обязательная секция отсутствует, frontmatter неполный, **или** маркер неопределённого имени встречается в нескольких формах в одном документе (`[ASR?]`, `[UNCLEAR: ...]`, `[ASR, ...]` — вперемешку). |
-| 2 | Несколько структурных отклонений от шаблона. |
-| 1 | Протокол вообще не следует ожидаемой схеме. |
-
-**Метод:** Checklist по шаблону из `agents/references/protocol-template.md`:
-- [ ] Frontmatter: type, subtype, recording_id, title, date, duration_min, participants, source, transcript, decisions_count, commitments_count, unclear_count
-- [ ] Секция "Участники"
-- [ ] Секция "Ключевые решения" с таблицей `| # | Решение | Кто принял | Таймкод | Confidence |`
-- [ ] Секция "Договорённости" с таблицей `| Кто | Что | Срок | Confidence | Таймкод |`
-- [ ] Секция "Открытые вопросы" с `[UNCLEAR]` маркерами
-- [ ] Секция "Флаги для владельца проекта" (если применимо)
-- [ ] Секция "Заметки" с источником
-- [ ] Секция "Ключевые тезисы" — **только** для `meeting_type: session`; у прочих типов
-      встречи отсутствует **полностью** (не пустая секция с заголовком без содержания)
-- [ ] Маркер неопределённого имени — ровно `[ASR?]` (форма задана
-      `agents/references/protocol-template.md`, не изобретается на месте оценщиком или
-      моделью-автором); единая форма во всём документе, включая повторные упоминания
-      одного и того же имени (FR-42 AC4 — согласованность в пределах документа)
-- [ ] `[ASR?]` **не** учтён в `unclear_count` frontmatter — счётчик считает только
-      `[UNCLEAR]` секции «Открытые вопросы», два токена не смешиваются в одном числе
-- [ ] `[UNCLEAR]` (открытые вопросы) и `[ASR?]` (неопределённое имя) — не спутаны между
-      собой: `[UNCLEAR]` на месте имени или `[ASR?]` в «Открытых вопросах» — дефект формы
+Ruling (do not dissolve into point 1, do not introduce a separate dimension): the scale does
+not change — the wording "one decision or agreement is missing" already covers this case at
+3/5. The defect was not in the numbers but in the method failing to say that this class of
+omission must be looked for separately from the comparison with the transcript. The fix is the
+method, point 2 above, plus the explicit mention in criterion 3/5, so that the evaluator does
+not read "missing" as only "entirely absent from the protocol".
 
 ---
 
-## 4. Actionability (Действенность) — 1-5
+## 2. Accuracy — 1–5
 
-Достаточно ли конкретны договорённости для исполнения (КТО, ЧТО, КОГДА)?
+Are the extracted facts correct? Is the attribution right (who said what)? Are the names
+resolved correctly through the profile directory?
 
-| Оценка | Критерий |
-|--------|---------|
-| 5 | Каждая договорённость имеет: ответственного, конкретное действие с названным объектом/областью, срок (или явное "срок не назван"). |
-| 4 | Все договорённости имеют КТО и ЧТО; 1-2 без срока без флага [UNCLEAR]. |
-| 3 | Некоторые договорённости размыты (глагол без объекта и без ownership — например голое "команда посмотрит" без указания что именно) и не флагированы. |
-| 2 | Несколько договорённостей без ответственного или слишком размыты для исполнения. |
-| 1 | Секция договорённостей непригодна — нет ясного ownership или действий. |
+| Score | Criterion |
+|-------|-----------|
+| 5 | Every fact matches the transcript. Every attribution is correct. No invented content. Name resolution (see Method) is correct. |
+| 4 | A minor paraphrase that shifts the meaning slightly, but no factual errors. |
+| 3 | One factual error, a wrong attribution (wrong person, number, date), **or** a name marking that contradicts the resolution fact (a name matched exactly against the directory marked as unconfirmed, or an ASR-distorted name left clean with no marker). |
+| 2 | Several factual errors, or a significant misattribution that changes the meaning. |
+| 1 | Invented content (a hallucination) — decisions or agreements that never happened. |
 
-**Метод:** Для каждой строки таблицы "Договорённости" проверить: "Кто" — конкретный
-человек? "Что" — конкретное действие **с названным объектом или областью**? Есть срок
-или явная пометка об его отсутствии?
+**Method:** spot-check every decision, agreement, date, number and name. Any invented item = 1
+automatically.
 
-Уточнение к «Что» после ADR-018 (снимает конфликт с калиброванными MEDIUM-обязательствами):
-глагол вида «покопать», «обдумать», «посмотреть» сам по себе не дефект Actionability,
-если у него есть предмет — «покопать по КЦП», «обдумать вопрос до понедельника».
-Дефект — глагол **без** объекта и без ownership («команда посмотрит», без указания что
-именно). Уровень уверенности исполнения (`confidence`: HIGH/MEDIUM/LOW) — отдельное
-измерение (§5 ниже), Actionability его не штрафует и не поощряет: обязательство
-«Покопать по КЦП» с `confidence: MEDIUM` (Пример 3б, `analysis-quality.md`) — конкретное
-действие для целей этого измерения, MEDIUM не превращает его в размытое.
+**Name resolution (FR-42 AC1).** For every proper name (a participant or a third party) met in
+the protocol:
 
----
+- Resolved unambiguously through the host project's profile directory → written in its
+  corrected form, **without** the `[ASR?]` marker. A resolved name carrying the marker is a
+  defect (false-positive uncertainty); count it as a factual error.
+- Not resolved (absent from the directory, no directory declared, or an ambiguous partial
+  match) → marked `[ASR?]`. An ASR-distorted name without the marker is a defect (missed
+  uncertainty); count it as a factual error.
 
-## 5. Confidence Usage (Корректность confidence) — 1-5
-
-Соответствуют ли уровни confidence (HIGH/MEDIUM/LOW) реальным доказательствам?
-
-| Оценка | Критерий |
-|--------|---------|
-| 5 | Confidence соответствуют доказательствам. HIGH = в реплике-акцепте есть явный акт согласия (не просто дословная цитата реплики-запроса). MEDIUM = однозначно выводится, либо акцепт — односложная реакция без акта согласия. [UNCLEAR] используется для неясных пунктов. |
-| 4 | Одно пограничное присвоение (напр. MEDIUM где точнее было бы LOW). |
-| 3 | Confidence отсутствуют в нескольких местах, **или** HIGH для явно выводимого контента, **или** HIGH присвоен по дословной цитате реплики-запроса при отсутствии акта согласия в реплике-акцепте (наклонение запроса, а не сила акцепта, определило confidence). |
-| 2 | Систематическая переоценка — много пунктов с HIGH без поддержки в транскрипте. |
-| 1 | Нет confidence аннотаций, или все пункты помечены HIGH вне зависимости от доказательств. |
-
-**Модальность запроса не определяет confidence — определяет реплика-акцепт.** Условная
-конструкция в реплике-запросе («может быть», «если вдруг», «возможно») сама по себе
-**не** дефект и не понижает confidence, если акцепт недвусмыслен. Дефект — присвоение
-HIGH по факту наличия дословной цитаты реплики-запроса без проверки, есть ли в
-реплике-акцепте явный акт согласия.
-
-Эталонные пары (обезличено до таймкода — FR-41 AC1/AC2 требования, регрессионные
-кейсы, обязаны давать указанный `confidence` на любой редакции промта):
-
-- Запрос, 00:46:54: «А ты можешь вот это вот, может быть, следующий понедельник здесь
-  рассказать?» → Акцепт, 00:47:09: «Хорошо. […] Договорились.» → **HIGH** (явный акт
-  согласия в акцепте; условность запроса на исход не влияет).
-- Запрос, 00:57:40: «Если вдруг ты найдёшь способ… может быть, даже просто по КЦП…
-  Подумаю дополнительно» → Акцепт, 00:57:51: «Покопать.» → **MEDIUM**, не HIGH
-  (односложная реакция без акта согласия; условность запроса та же, что в первой паре —
-  различает пары не наклонение запроса, а сила акцепта).
-
-Наличие дословной цитаты — необходимое условие HIGH, но не достаточное: цитата должна
-быть цитатой акцепта с актом согласия, не цитатой запроса.
+This is an error in the content of a particular name (Accuracy), not in the marker's form as a
+schema element (that is §3 below) — a protocol where the same class of uncertainty is marked
+inconsistently in both directions (an exact clean name marked, a distorted one not) cannot
+score 5, even if every other fact is right.
 
 ---
 
-## Композитная оценка
+## 3. Schema Consistency — 1–5
+
+Does the output follow the expected protocol template?
+
+| Score | Criterion |
+|-------|-----------|
+| 5 | Every mandatory section present. Frontmatter complete and correct. Confidence values stated. Timecodes present. The `[ASR?]` marker is of a single form and does not count towards `unclear_count`. `Ключевые тезисы` is present only when `meeting_type: session`. |
+| 4 | Minor formatting problems (one optional section missing) **or** `Ключевые тезисы` present as an empty placeholder section instead of being absent entirely for a non-`session` type. |
+| 3 | One mandatory section missing, frontmatter incomplete, **or** the uncertain-name marker appears in several forms in one document (`[ASR?]`, `[UNCLEAR: ...]`, `[ASR, ...]` mixed together). |
+| 2 | Several structural deviations from the template. |
+| 1 | The protocol does not follow the expected schema at all. |
+
+**Method:** a checklist against the template in `agents/references/protocol-template.md`:
+
+- [ ] Frontmatter: type, subtype, recording_id, title, date, duration_min, participants,
+      source, transcript, decisions_count, commitments_count, unclear_count
+- [ ] The `Участники` section
+- [ ] The `Ключевые решения` section with the table
+      `| # | Решение | Кто принял | Таймкод | Confidence |`
+- [ ] The `Договорённости` section with the table
+      `| Кто | Что | Срок | Confidence | Таймкод |`
+- [ ] The `Открытые вопросы` section with `[UNCLEAR]` markers
+- [ ] The `Флаги для владельца проекта` section (where applicable)
+- [ ] The `Заметки` section with the source
+- [ ] The `Ключевые тезисы` section — **only** for `meeting_type: session`; for every other
+      meeting type it is absent **entirely** (not an empty section with a heading and no
+      content)
+- [ ] The uncertain-name marker is exactly `[ASR?]` (the form is fixed by
+      `agents/references/protocol-template.md`; it is not invented on the spot by the
+      evaluator or by the authoring model); a single form throughout the document, including
+      repeated mentions of the same name (FR-42 AC4 — consistency within the document)
+- [ ] `[ASR?]` is **not** counted in the frontmatter `unclear_count` — that counter counts
+      only the `[UNCLEAR]` items of the `Открытые вопросы` section; the two tokens are never
+      mixed in one number
+- [ ] `[UNCLEAR]` (open questions) and `[ASR?]` (an uncertain name) are not confused with each
+      other: `[UNCLEAR]` in place of a name, or `[ASR?]` inside `Открытые вопросы`, is a
+      defect of form
+
+---
+
+## 4. Actionability — 1–5
+
+Are the agreements concrete enough to be executed (WHO, WHAT, WHEN)?
+
+| Score | Criterion |
+|-------|-----------|
+| 5 | Every agreement has an owner, a concrete action with a named object or area, and a deadline (or an explicit "no deadline stated"). |
+| 4 | Every agreement has WHO and WHAT; 1–2 lack a deadline without an `[UNCLEAR]` flag. |
+| 3 | Some agreements are vague (a verb with no object and no ownership — for example a bare `команда посмотрит` with no statement of what exactly) and are not flagged. |
+| 2 | Several agreements have no owner or are too vague to execute. |
+| 1 | The agreements section is unusable — no clear ownership or actions. |
+
+**Method:** for each row of the `Договорённости` table check: is `Кто` a concrete person? Is
+`Что` a concrete action **with a named object or area**? Is there a deadline, or an explicit
+note that there is none?
+
+A clarification of `Что` after ADR-018 (it removes the conflict with calibrated MEDIUM
+commitments): a verb such as `покопать`, `обдумать`, `посмотреть` is not by itself an
+Actionability defect if it has an object — `покопать по КЦП` or
+`обдумать вопрос до понедельника`. The defect is a verb **without** an object and without ownership
+(`команда посмотрит`, with no statement of what exactly). The execution confidence level
+(`confidence`: HIGH/MEDIUM/LOW) is a separate dimension (§5 below); Actionability neither
+penalises nor rewards it: the commitment `Покопать по КЦП` with `confidence: MEDIUM`
+(Example 3b, `analysis-quality.md`) is a concrete action for the purposes of this dimension,
+and MEDIUM does not turn it into a vague one.
+
+---
+
+## 5. Confidence Usage — 1–5
+
+Do the confidence levels (HIGH/MEDIUM/LOW) match the actual evidence?
+
+| Score | Criterion |
+|-------|-----------|
+| 5 | Confidence matches the evidence. HIGH = the accepting utterance carries an explicit act of agreement (not merely a verbatim quotation of the requesting utterance). MEDIUM = unambiguously inferred, or the acceptance is a one-word reaction with no act of agreement. `[UNCLEAR]` is used for unclear items. |
+| 4 | One borderline assignment (e.g. MEDIUM where LOW would be more precise). |
+| 3 | Confidence is missing in several places, **or** HIGH is used for clearly inferred content, **or** HIGH was assigned on the strength of a verbatim quotation of the requesting utterance with no act of agreement in the accepting one (the mood of the request, rather than the force of the acceptance, decided the confidence). |
+| 2 | Systematic overrating — many items marked HIGH without support in the transcript. |
+| 1 | No confidence annotations, or every item marked HIGH regardless of the evidence. |
+
+**The modality of the request does not determine confidence — the accepting utterance does.**
+A conditional construction in the requesting utterance (`может быть`, `если вдруг`,
+`возможно`) is **not** by itself a defect and does not lower confidence if the acceptance is
+unambiguous. The defect is assigning HIGH on the strength of a verbatim quotation of the
+request without checking whether the accepting utterance carries an explicit act of agreement.
+
+Reference pairs (anonymised down to the timecode — FR-41 AC1/AC2 of the requirement,
+regression cases; they must yield the stated `confidence` under any revision of the prompt):
+
+```
+Запрос [00:46:54]: А ты можешь вот это вот, может быть, следующий понедельник здесь рассказать?
+Акцепт [00:47:09]: Хорошо. […] Договорились.                                        → HIGH
+
+Запрос [00:57:40]: Если вдруг ты найдёшь способ… может быть, даже просто по КЦП… Подумаю дополнительно
+Акцепт [00:57:51]: Покопать.                                                        → MEDIUM
+```
+
+The first pair is HIGH because the acceptance carries an explicit act of agreement; the
+conditionality of the request does not affect the outcome. The second is MEDIUM, not HIGH: a
+one-word reaction with no act of agreement. The conditionality of the request is the same in
+both — what tells the pairs apart is not the mood of the request but the force of the
+acceptance.
+
+The presence of a verbatim quotation is a necessary condition for HIGH but not a sufficient
+one: the quotation must be of the acceptance carrying the act of agreement, not of the
+request.
+
+---
+
+## Composite score
 
 **Overall = (Completeness + Accuracy + Actionability + Confidence Usage) / 4**
 
-Schema Consistency — отдельно ("format health").
+Schema Consistency is reported separately ("format health").
 
-Пороги:
-- **4.0+** — отлично, переработка не нужна
-- **3.0–3.9** — приемлемо, возможны улучшения
-- **2.0–2.9** — нужна переработка
-- **< 2.0** — серьёзные проблемы качества
+Thresholds:
 
-## Token Efficiency (качественная оценка)
+- **4.0+** — excellent, no rework needed
+- **3.0–3.9** — acceptable, improvements possible
+- **2.0–2.9** — rework needed
+- **< 2.0** — serious quality problems
 
-Не оценивается числом. Фиксируется:
-- Длина транскрипта (символы)
-- Длина протокола (символы)
-- Коэффициент сжатия (транскрипт / протокол)
-- Наблюдение: протокол слишком многословен или слишком краток?
+## Token Efficiency (a qualitative observation)
+
+Not scored numerically. Recorded:
+
+- Transcript length (characters)
+- Protocol length (characters)
+- Compression ratio (transcript / protocol)
+- Observation: is the protocol too verbose or too terse?
 
 ---
 
-## Способ верификации: чтение протокола vs прогон A/B
+## Verification method: reading the protocol vs an A/B run
 
-Не все критерии выше проверяются чтением одного протокола — часть видна только при
-сравнении двух прогонов одной записи разными редакциями промта (A/B). Разграничение
-(источник: ADR-018 spec, §3 «Разграничение верификации»):
+Not every criterion above can be checked by reading one protocol — some are visible only when
+two runs of the same recording under different prompt revisions are compared (A/B). The
+division (source: the ADR-018 spec, §3 `Разграничение верификации`):
 
-| Что проверяется | Способ |
+| What is checked | Method |
 |---|---|
-| §1 внутренняя согласованность прозы и таблицы «Договорённости» | чтение одного протокола |
-| §2 резолвинг конкретного имени против каталога профилей | чтение одного протокола + каталог профилей |
-| §3 форма маркера `[ASR?]`, состав и опциональность секций | чтение одного протокола |
-| §4 конкретность КТО/ЧТО/КОГДА | чтение одного протокола |
-| §5 confidence по конкретной реплике-акцепту, присутствующей в **этой** записи | чтение одного протокола (прямое сопоставление с транскриптом записи) |
-| Регрессия: тот же фрагмент транскрипта даёт другой confidence на новой редакции промта, чем на старой | **только** сравнение A/B двух прогонов одной записи |
-| Устойчивость исправления между типами встреч (не единичная удача на одной записи) | **только** сравнение A/B на нескольких записях |
-| NFR-25 AC1 (подъём minor-версии при правке промт-слоя) | статический diff-скрипт (`check-plugin-composition.sh`), не эта рубрика |
+| §1 internal consistency of the prose and the `Договорённости` table | reading one protocol |
+| §2 resolution of a particular name against the profile directory | reading one protocol + the profile directory |
+| §3 the form of the `[ASR?]` marker, section composition and optionality | reading one protocol |
+| §4 concreteness of WHO/WHAT/WHEN | reading one protocol |
+| §5 confidence for a particular accepting utterance present in **this** recording | reading one protocol (a direct comparison with the recording's transcript) |
+| Regression: the same transcript fragment yields a different confidence under a new prompt revision than under the old one | **only** an A/B comparison of two runs of one recording |
+| Robustness of a fix across meeting types (not a one-off success on a single recording) | **only** an A/B comparison across several recordings |
+| NFR-25 AC1 (a minor version bump when the prompt layer changes) | a static diff script (`check-plugin-composition.sh`), not this rubric |
 
-Термин «автоматическая проверка», использованный в AC требования, не означает
-существующий автотест: автотеста поведения промта в этом плагине нет и по границе
-ADR-012 быть не может (промт-слой не покрыт pytest пакета `ktalk-mcp`). Способ
-верификации каждого пункта — по таблице выше: либо чтение текста протокола (человеком
-или оценщиком-LLM), либо сравнение двух прогонов A/B; ни один из них не CI-автотест в
-привычном смысле.
+The term "automatic check" used in the requirement's AC does not mean an existing automated
+test: there is no automated test of prompt behaviour in this plugin, and by the ADR-012
+boundary there cannot be one (the prompt layer is not covered by the `ktalk-mcp` package's
+pytest suite). The verification method for each item is given by the table above: either
+reading the protocol text (by a human or by an LLM evaluator), or comparing two A/B runs;
+neither is a CI test in the usual sense.
 
-## Версия плагина в отчёте и трекере (NFR-25 AC2)
+## The plugin version in the report and the tracker (NFR-25 AC2)
 
-Отчёт `ktalk-evaluator` и строка трекера обязаны нести версию плагина
-(`.claude-plugin/plugin.json`, поле `version`) на момент прогона — не только внутренний
-`prompt_version` навыка (`skills/ktalk-registry/_meta.md`). Это два независимых
-счётчика, разрыв между ними уже наблюдался (`prompt_version` навыка и версия плагина в
-трекере оператора расходились, DEV-014): один растёт при правке текста конкретного
-файла, другой — при любой правке `agents/`/`skills/ktalk-registry/` (может не совпадать
-с фактом правки файла, несущего `prompt_version`).
+The `ktalk-evaluator` report and the tracker row MUST carry the plugin version
+(`.claude-plugin/plugin.json`, the `version` field) as of the run — not only the skill's
+internal `prompt_version` (`skills/ktalk-registry/_meta.md`). These are two independent
+counters and they have already diverged (the skill's `prompt_version` and the plugin version
+in the operator's tracker disagreed, DEV-014): one grows when the text of a particular file is
+edited, the other when anything under `agents/` or `skills/ktalk-registry/` is edited (which
+need not coincide with editing the file that carries `prompt_version`).
 
-- `plugin_version` — обязательное поле frontmatter отчёта и колонка трекера, значение —
-  `version` из `.claude-plugin/plugin.json` на момент прогона (например `1.3.0`).
-- `prompt_version` — сохраняется рядом, не заменяется `plugin_version` и не подменяет
-  его: это разные величины (внутренний счётчик навыка vs версия пакета плагина).
+- `plugin_version` — a mandatory frontmatter field of the report and a tracker column; the
+  value is `version` from `.claude-plugin/plugin.json` as of the run (for example `1.3.0`).
+- `prompt_version` — kept alongside; it is neither replaced by nor a substitute for
+  `plugin_version`: they are different quantities (the skill's internal counter vs the plugin
+  package version).
 
-Отчёт или строка трекера без `plugin_version` — неполный контракт вывода
-`ktalk-evaluator`/`ktalk-eval` (точный формат поля — `agents/ktalk-evaluator.md`,
-`skills/ktalk-eval/SKILL.md`); в шкале §3 этой рубрики поле не участвует — §3 оценивает
-протокол встречи по `protocol-template.md`, не отчёт `ktalk-eval` о самом себе.
+A report or a tracker row without `plugin_version` is an incomplete output contract of
+`ktalk-evaluator` / `ktalk-eval` (the exact field format is in `agents/ktalk-evaluator.md` and
+`skills/ktalk-eval/SKILL.md`); the field takes no part in the §3 scale of this rubric — §3
+scores the meeting protocol against `protocol-template.md`, not the `ktalk-eval` report about
+itself.

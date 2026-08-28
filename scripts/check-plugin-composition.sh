@@ -132,6 +132,14 @@ check_prompt_version_sync() {
 
 check_prompt_version_sync
 
+# ADR-021 Д6 (capability `prompt-language-boundary`): языковая граница промт-слоя —
+# блокирующий гейт, и живёт он здесь, а не в scripts/check.sh: тот доставляется плагином
+# nauta и заморожен по sha256 в .nauta-scripts-basis.yaml, правка увела бы дерево в дрейф
+# поставки. Скрипт печатает собственную диагностику; здесь достаточно кода возврата.
+if ! bash scripts/check-prompt-language.sh; then
+    fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
     echo
     echo "Проверка состава плагина: FAIL"
