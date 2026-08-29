@@ -1,41 +1,47 @@
 ---
 description: >
-  Реестр записей Kontur Talk — синхронизация, просмотр, обработка транскриптов.
-  Используй при "ktalk", "записи", "транскрипты", "реестр встреч",
+  Kontur Talk recording registry — synchronisation, review, transcript processing.
+  Trigger phrases (Russian, matched against the owner's utterance — do not translate):
+  "ktalk", "записи", "транскрипты", "реестр встреч",
   "обработай записи", "что нового в толке", "синхронизируй записи".
 ---
 
-# /ktalk-registry — Реестр записей Kontur Talk
+# /ktalk-registry — Kontur Talk recording registry
 
-> **Синхронизация записей ktalk, сбор контекста, запуск фоновых агентов-обработчиков**
+> **Synchronise ktalk recordings, gather context, launch background processor agents**
 
----
-
-## Что делает эта команда
-
-1. Получает новые записи из Kontur Talk (последние 7 дней)
-2. Обновляет markdown-зеркало реестра
-3. Обновляет `ktalk_id` в профилях участников (если каталог профилей объявлен)
-4. Показывает необработанные записи
-5. Для каждой выбранной записи — собирает контекст (куда сохранить, доп. вводные)
-6. Запускает агент `ktalk-processor` в фоне для каждой встречи
+**Language.** Reason in English. Every string shown to a human — and every string written into
+the host's vault — is Russian: reproduce the Russian literals in this file and in the
+referenced files verbatim, never translate or reword them (ADR-021).
 
 ---
 
-## Инструкции
+## What this command does
 
-Загрузи и выполни workflow из skill `ktalk-registry` (`skills/ktalk-registry/SKILL.md`).
-
-Раскладка каталогов проекта-хозяина — не в этой команде и не в CLAUDE.md хозяина:
-discovery-конфиг `.ktalk.toml` (если объявлен) читается кодом пакета `ktalk-mcp`
-командой `ktalk config show --json` (шаг 0 workflow) — обращайся туда, не к
-текстовым описаниям раскладки.
+1. Fetches new recordings from Kontur Talk (the last 7 days)
+2. Updates the markdown mirror of the registry
+3. Updates `ktalk_id` in participant profiles (if a profile directory is declared)
+4. Shows the unprocessed recordings
+5. For each selected recording — gathers context (where to save, extra input)
+6. Launches the `ktalk-processor` agent in the background for each meeting
 
 ---
 
-## Связанные инструменты
+## Instructions
 
-| Инструмент | Для чего |
-|-----------|----------|
-| `ktalk-processor` агент | Обработка конкретной записи (запускается автоматически) |
-| `ktalk config show` | Раскладка проекта-хозяина |
+Load and run the workflow from the `ktalk-registry` skill
+(`skills/ktalk-registry/SKILL.md`).
+
+The host project's directory layout lives neither in this command nor in the host's
+`CLAUDE.md`: the discovery config `.ktalk.toml` (if declared) is read by the `ktalk-mcp`
+package through `ktalk config show --json` (workflow step 0) — go there, not to any textual
+description of the layout.
+
+---
+
+## Related tools
+
+| Tool | Purpose |
+|------|---------|
+| `ktalk-processor` agent | Processing one recording (launched automatically) |
+| `ktalk config show` | The host project's layout |

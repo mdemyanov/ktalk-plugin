@@ -1,9 +1,13 @@
-# Шаблон протокола встречи
+# Meeting protocol template
 
-Reference-файл `ktalk-processor.md` (шаг 5 ядра). `{id}` в ссылках на профили —
-подставляется по `registry.directories.people` из `ktalk config show --json`
-(шаг 0б ядра); если ключ не объявлен — участник указывается текстом, без
-wiki-ссылки на каталог профилей.
+A reference file of `ktalk-processor.md` (core step 5). `{id}` in profile links is
+substituted from `registry.directories.people` returned by `ktalk config show --json`
+(core step 0b); if the key is not declared, the participant is named as plain text, with no
+wiki-link to a profile directory.
+
+The template below is the artefact written into the host's vault. Its Russian headings, table
+headers and placeholders are reproduced verbatim — translating or rewording any of them
+changes every protocol the plugin writes (ADR-021 D1, FR-3 class 2).
 
 ```markdown
 ---
@@ -56,14 +60,15 @@ unclear_count: {N}
 - {тезис} (⏱ {HH:MM:SS})
 ```
 
-**Маркер неопределённого имени:** `[ASR?]`, вплотную после имени без пробела перед
-скобкой — например, `Дмитрий Иванов[ASR?]`. Означает: имя не резолвилось однозначно
-через каталог профилей (участник или третье лицо). Не совпадает и не заменяет `[UNCLEAR]`
-(открытые вопросы встречи, отдельная секция и отдельный счётчик `unclear_count`) — два
-разных смысла, два разных токена. `[ASR?]` не входит в `unclear_count`.
+**Uncertain-name marker:** `[ASR?]`, placed immediately after the name with no space before
+the bracket — for example, `Дмитрий Иванов[ASR?]`. It means the name did not resolve
+unambiguously through the profile directory (a participant or a third party). It is neither
+the same as nor a replacement for `[UNCLEAR]` (open questions of the meeting, a separate
+section and a separate `unclear_count` counter) — two different meanings, two different
+tokens. `[ASR?]` does not count towards `unclear_count`.
 
-Порядок секций протокола: Участники, Ключевые решения, Договорённости, Обновления
-статуса, Открытые вопросы, Флаги для владельца проекта, Заметки, **Ключевые тезисы**
-(только для `meeting_type: session`; отсутствует у прочих типов встречи — не пустая
-секция с заглушкой, а полностью опущена). Первые семь секций фиксированы и порядок
-не меняется; восьмая — опциональное дополнение только для `session`.
+Section order in the protocol: `Участники`, `Ключевые решения`, `Договорённости`,
+`Обновления статуса`, `Открытые вопросы`, `Флаги для владельца проекта`, `Заметки`,
+**`Ключевые тезисы`** (only for `meeting_type: session`; absent for every other meeting type —
+not an empty section with a placeholder, but omitted entirely). The first seven sections are
+fixed and their order never changes; the eighth is an optional addition for `session` only.

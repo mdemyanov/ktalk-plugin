@@ -1,78 +1,85 @@
-# Онбординг: пакет ktalk-mcp
+# Onboarding: the ktalk-mcp package
 
-Файл читается, когда `scripts/ktalk-onboard.sh check` вернул ненулевой код. Значения токенов
-здесь не запрашиваются, не печатаются и не записываются никуда — проверяется только факт
-настройки.
+This file is read when `scripts/ktalk-onboard.sh check` returns a non-zero code. Token values
+are never requested, printed or written anywhere here — only the fact of configuration is
+checked.
 
-## Код 10 — пакет не установлен
+Everything shown to the operator stays Russian; the instructions are English (ADR-021 D1).
 
-Покажи пользователю команду дословно и **не выполняй её сам**:
+## Code 10 — the package is not installed
+
+Show the user the command verbatim and **do not run it yourself**:
 
     uv tool install ktalk-mcp
 
-Проверка после установки: `which ktalk-mcp` или `ktalk --help`.
+Verification after installation: `which ktalk-mcp` or `ktalk --help`.
 
-Если пользователь готов доверить установку плагину — санкция выдаётся им самим в терминале:
+If the user is willing to let the plugin install it, the sanction is granted by the user
+themselves, in their own terminal:
 
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh grant install
 
-Эту команду выполняет пользователь. Агент её не запускает: без терминала она откажет (код 33).
-После выдачи санкции установку выполняет `bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh install`.
+The user runs this command. The agent never runs it: without a terminal it refuses (code 33).
+Once the sanction is granted, the installation is performed by
+`bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh install`.
 
-После `install` повтори `check`: код 0 у `install` означает только, что менеджер отработал и
-версия сошлась; иной код (в том числе 11 — поставилась версия ниже минимальной) разбирается
-по этому же файлу.
+After `install`, repeat `check`: exit code 0 from `install` means only that the package
+manager did its job and the version matched; any other code (including 11 — a version below
+the minimum was installed) is handled by this same file.
 
-`install` может вернуть **10** и после того, как менеджер пакетов отработал без ошибки: `uv`
-ставит бинарь в свой каталог инструментов (обычно `~/.local/bin`), а он не всегда есть в `PATH`
-процесса. Сообщение `install` в этом случае прямо называет причину — «команда ktalk не
-резолвится через PATH» — и предлагает добавить каталог инструментов uv в `PATH`. Это не сбой
-установки: пакет поставлен, `uv tool list` его видит, но выполнить `ktalk …` в текущей сессии
-всё ещё нельзя. После правки `PATH` (новая сессия оболочки либо `export PATH=...`) — снова
-`check`.
+`install` can return **10** even after the package manager finished without error: `uv` puts
+the binary in its own tools directory (usually `~/.local/bin`), which is not always on the
+process `PATH`. In that case the `install` message names the cause directly —
+`команда ktalk не резолвится через PATH` — and offers to add uv's tools directory to `PATH`.
+This is not an
+installation failure: the package is installed and `uv tool list` sees it, but `ktalk …` still
+cannot be executed in the current session. After fixing `PATH` (a new shell session or
+`export PATH=...`) — run `check` again.
 
-## Код 12 — нет uv
+## Code 12 — no uv
 
-Отсутствует `uv`, а не `ktalk-mcp`. Плагин `uv` не устанавливает. Сообщи, что нужно поставить
-`uv` (https://docs.astral.sh/uv/), и повтори проверку.
+`uv` is missing, not `ktalk-mcp`. The plugin does not install `uv`. Tell the user that `uv`
+needs to be installed (https://docs.astral.sh/uv/) and repeat the check.
 
-## Код 11 — версия ниже минимальной
+## Code 11 — version below the minimum
 
-Сообщи установленную и минимальную версии. Обновление — отдельная санкция:
+Report the installed version and the minimum version. An upgrade is a separate sanction:
 
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh grant update
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh install
 
-Первую команду выполняет пользователь. Агент её не запускает: без терминала она откажет (код 33).
-Вторую агент выполняет только после того, как санкция на обновление уже выдана.
+The user runs the first command. The agent never runs it: without a terminal it refuses
+(code 33). The agent runs the second one only after the upgrade sanction has been granted.
 
-После `install` повтори `check`. `uv tool upgrade` печатает «Nothing to upgrade» с кодом 0, если
-в индексе нет версии новее: тогда `install` тоже вернёт 11 и версия останется прежней. Повторять
-установку в этом случае бессмысленно — сообщи пользователю, что совместимой версии в индексе нет.
+After `install`, repeat `check`. `uv tool upgrade` prints "Nothing to upgrade" with exit
+code 0 when the index holds no newer version: `install` then also returns 11 and the version
+stays as it was. Repeating the installation in that case is pointless — tell the user that
+the index holds no compatible version.
 
-Работу можно продолжать: несовместимость версии — предупреждение, не блокировка. Часть сценариев
-при этом может не работать.
+Work can continue: a version mismatch is a warning, not a blocker. Some scenarios may not
+work.
 
-## Код 20 — внутренняя ошибка плагина
+## Code 20 — internal plugin error
 
-Не прочитан `compat.json` плагина: файла нет, он нечитаем или не содержит ключа
-`ktalk_mcp_min_version`. Минимальная версия неизвестна, проверять нечем. Действие — переустановить
-плагин (`/plugin marketplace update ktalk-plugins`, затем `/plugin install ktalk@ktalk-plugins`).
-Поле `message` в JSON несёт то же действие дословно.
+The plugin's `compat.json` was not read: the file is missing, unreadable, or holds no
+`ktalk_mcp_min_version` key. The minimum version is unknown and there is nothing to check
+against. The action is to reinstall the plugin (`/plugin marketplace update ktalk-plugins`,
+then `/plugin install ktalk@ktalk-plugins`). The `message` field in the JSON carries the same
+action verbatim.
 
-## Авторизация
+## Authorisation
 
-Поддерживаются два режима, значение хранит окружение, не плагин:
+Two modes are supported; the value is held by the environment, not by the plugin:
 
-- `KTALK_PERSONAL_API_KEY` — личный API-ключ, передаётся заголовком `X-Auth-Token`;
-- `KTALK_SESSION_TOKEN` — сессионный токен, передаётся параметром `sessionToken`.
+- `KTALK_PERSONAL_API_KEY` — a personal API key, sent in the `X-Auth-Token` header;
+- `KTALK_SESSION_TOKEN` — a session token, sent in the `sessionToken` parameter.
 
-Если заданы оба, побеждает `KTALK_PERSONAL_API_KEY`, сессионный токен не читается.
+If both are set, `KTALK_PERSONAL_API_KEY` wins and the session token is not read.
 
-Где взять: личный API-ключ — в профиле пользователя в интерфейсе Толка; сессионный токен —
-из активной сессии веб-клиента. Куда положить: переменная окружения процесса Claude Code либо
-`.mcp.json`/`settings.json` проекта-хозяина. **Не** в файл внутри дерева плагина и не в
-`.ktalk.toml`.
+Where to get them: the personal API key — from the user profile in the Kontur Talk interface;
+the session token — from an active web-client session. Where to put them: an environment
+variable of the Claude Code process, or the host project's `.mcp.json` / `settings.json`.
+**Not** in a file inside the plugin tree, and not in `.ktalk.toml`.
 
-Проверка режима: `ktalk auth-status --json` — печатает выбранный режим, не значение секрета.
-Никогда не проси прислать значение токена в чат и не печатай его.
+Checking the mode: `ktalk auth-status --json` — it prints the selected mode, never the secret
+value. Never ask for a token value to be pasted into the chat, and never print one.

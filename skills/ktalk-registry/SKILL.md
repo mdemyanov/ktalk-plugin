@@ -1,87 +1,94 @@
 ---
 name: ktalk-registry
 description: >
-  Управление реестром записей Kontur Talk — синхронизация новых записей,
-  отслеживание обработки, архивация транскриптов в markdown.
-  Используй при "ktalk", "записи", "транскрипты", "реестр встреч",
+  Manage the Kontur Talk recording registry — synchronise new recordings, track processing,
+  archive transcripts into markdown.
+  Trigger phrases (Russian, matched against the owner's utterance — do not translate):
+  "ktalk", "записи", "транскрипты", "реестр встреч",
   "обработай записи", "что нового в толке", "ktalk registry",
   "покажи необработанные встречи", "синхронизируй записи".
-  Даже если пользователь просто упоминает записи ktalk — используй этот skill.
+  Use this skill even when the user merely mentions ktalk recordings.
 ---
 
-# Реестр записей Kontur Talk
+# Kontur Talk recording registry
 
-## Предусловие: пакет ktalk-mcp
+**Language.** Reason in English. Every string shown to a human — and every string written into
+the host's vault — is Russian: reproduce the Russian literals in this file and in the
+referenced files verbatim, never translate or reword them (ADR-021).
 
-Перед первой командой `ktalk` в сессии выполни:
+## Precondition: the ktalk-mcp package
+
+Before the first `ktalk` command in a session, run:
 
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh check --json
 
-Код 0 — работай дальше. Ненулевой код — прочитай `${CLAUDE_PLUGIN_ROOT}/references/onboarding.md`
-и действуй по нему; не пропускай шаг молча и не выдумывай результат. Команды установки и выдачи
-санкции сам не выполняешь: `install` — только после того как санкция уже выдана пользователем,
-`grant` — никогда.
+Exit code 0 — carry on. A non-zero code — read
+`${CLAUDE_PLUGIN_ROOT}/references/onboarding.md` and follow it; never skip the step silently
+and never invent its result. You do not run the installation and sanction commands yourself:
+`install` only after the user has already granted the sanction, `grant` never.
 
-Skill-оркестратор. Вся механика реестра (синхронизация, дедуп, экспирация,
-смена статусов, рендер дашборда и markdown-зеркала) выполняется **CLI `ktalk`**,
-а не рассуждением модели. Skill вызывает CLI, показывает его вывод, собирает
-выбор и контекст у пользователя и запускает фоновых агентов-обработчиков.
+This is an orchestrator skill. All the registry mechanics (synchronisation, deduplication,
+expiration, status changes, rendering the dashboard and the markdown mirror) are performed by
+the **`ktalk` CLI**, not by the model's reasoning. The skill calls the CLI, shows its output,
+collects the user's selection and context, and launches background processor agents.
 
-Раскладка каталогов проекта-хозяина (пути реестра, маршрутизация протоколов,
-каталоги профилей/проектов) не зашита в этот навык — она читается командой
-`ktalk config show --json` (шаг 0). Проект без объявленной раскладки — штатная
-ветка: команды реестра (`sync`/`dashboard`/`list`/`show`/`mark-*`/`export`)
-работают на машинном дефолте, шаги, зависящие от каталогов профилей/проектов
-или от `qmd`, помечают результат явно, не выполняются наполовину.
+The host project's directory layout (registry paths, protocol routing, profile and project
+directories) is not hard-coded in this skill — it is read by `ktalk config show --json`
+(step 0). A project with no declared layout is a normal branch: the registry commands
+(`sync`/`dashboard`/`list`/`show`/`mark-*`/`export`) work on the machine default, and the
+steps that depend on profile/project directories or on `qmd` mark their result explicitly
+rather than being half-performed.
 
-Подробная модель данных: `references/registry-format.md`
-Инструкция по качеству анализа: `references/analysis-quality.md`
+The detailed data model: `references/registry-format.md`
+The analysis-quality instructions: `references/analysis-quality.md`
 
-## Архитектура
+## Architecture
 
-- **SQLite** — операционный source of truth (ID/статусы/пути/даты/участники).
-  Расположение резолвится приоритетом `--db > KTALK_REGISTRY_DB > конфиг
-  хозяина > машинный дефолт` — не константа этого навыка.
-- **CLI `ktalk`** — детерминированная механика и чтение контента (записи,
-  транскрипты, саммари). Все команды поддерживают `--json` (валидный JSON в
-  stdout; ошибки — в stderr с ненулевым кодом). Приоритетный канал вызова —
-  этот, не MCP (ADR-012 §2а проекта `ktalk-mcp`).
-- **Markdown-зеркало реестра** — генерируемое read-only (`ktalk export`), путь
-  внутри проекта-хозяина. **Не редактировать вручную и не парсить как источник.**
+- **SQLite** — the operational source of truth (IDs, statuses, paths, dates, participants).
+  Its location is resolved by the priority `--db > KTALK_REGISTRY_DB > the host's config >
+  a machine default` — it is not a constant of this skill.
+- **The `ktalk` CLI** — deterministic mechanics and content reading (recordings, transcripts,
+  summaries). Every command supports `--json` (valid JSON on stdout; errors on stderr with a
+  non-zero exit code). This is the primary call channel, not MCP (ADR-012 §2a of the
+  `ktalk-mcp` project).
+- **The markdown mirror of the registry** — generated and read-only (`ktalk export`), at a
+  path inside the host project. **Never edit it by hand and never parse it as a source.**
 
-## Принципы
+## Principles
 
-1. **Механика — в CLI.** Не читать/не переписывать таблицы, не дедуплицировать
-   и не экспирировать руками — это делает `ktalk sync`.
-2. **Идемпотентность** — повторный `ktalk sync` не плодит дубликаты.
-3. **Контекст до запуска** — все вопросы пользователю собираются ДО запуска агента.
-4. **Фоновая обработка** — агент `ktalk-processor` запускается в фоне.
-5. **ktalk_id first** — поиск профилей по ktalk_id (точно), fallback по имени.
-6. **Деградация — явная.** Отсутствие каталога/интеграции хозяина не блокирует
-   шаги, не зависящие от неё; недоступная часть помечается в выводе, не молчит.
+1. **Mechanics live in the CLI.** Do not read or rewrite tables, do not deduplicate and do not
+   expire by hand — `ktalk sync` does that.
+2. **Idempotency** — a repeated `ktalk sync` breeds no duplicates.
+3. **Context before launch** — every question to the user is collected BEFORE the agent is
+   launched.
+4. **Background processing** — the `ktalk-processor` agent is launched in the background.
+5. **ktalk_id first** — look profiles up by ktalk_id (exact), falling back to the name.
+6. **Degradation is explicit.** A missing host directory or integration does not block the
+   steps that do not depend on it; the unavailable part is marked in the output rather than
+   passed over in silence.
 
 ## Workflow
 
-### Шаг 0. Прочитать конфигурацию проекта-хозяина
+### Step 0. Read the host project's configuration
 
 ```
 ktalk config show --json
 ```
 
-Взять `registry.db_path` (информационно — CLI сам резолвит приоритет),
-`directories.people`, `directories.projects_active`, `routing.*`,
-`integrations.qmd`. Отсутствующий ключ — не ошибка, штатная ветка (см.
-«Контракт деградации» ниже). Держать значения в контексте для шагов 4/5.
+Take `registry.db_path` (informational — the CLI resolves the priority itself),
+`directories.people`, `directories.projects_active`, `routing.*` and `integrations.qmd`. A
+missing key is not an error but a normal branch (see "The degradation contract" below). Keep
+the values in context for steps 4 and 5.
 
-### Шаг 1. Синхронизация
+### Step 1. Synchronisation
 
 ```
 ktalk sync --json
 ```
 
-CLI загружает записи из ktalk за окно (по умолчанию 7 дней), добавляет новые
-(`new`), экспирирует записи `new` строго старше 7 дней (→ `skipped`), обновляет
-`last_synced`/`sync_count`. Вывод:
+The CLI fetches recordings from ktalk for the window (7 days by default), adds new ones
+(`new`), expires `new` records strictly older than 7 days (→ `skipped`), and updates
+`last_synced` / `sync_count`. The output:
 
 ```json
 {
@@ -91,20 +98,20 @@ CLI загружает записи из ktalk за окно (по умолча�
 }
 ```
 
-При ошибке (например, истёк `KTALK_SESSION_TOKEN`) CLI вернёт ненулевой код и
-сообщение в stderr — покажи его пользователю и остановись.
+On an error (an expired `KTALK_SESSION_TOKEN`, for instance) the CLI returns a non-zero code
+and a message on stderr — show it to the user and stop.
 
-### Шаг 2. Показать dashboard
+### Step 2. Show the dashboard
 
-Получи список новых записей и статистику:
+Get the list of new recordings and the statistics:
 
 ```
 ktalk dashboard --json
 ```
 
-Вывод: `{"new": [{recording_id, name, date, duration_min, ...}], "stats": {...}}`.
+Output: `{"new": [{recording_id, name, date, duration_min, ...}], "stats": {...}}`.
 
-Покажи пользователю пронумерованный список новых записей и статистику:
+Show the user a numbered list of new recordings and the statistics:
 
 ```
 ## Реестр ktalk — {{today}}
@@ -122,40 +129,41 @@ ktalk dashboard --json
 Какие записи обработать? (номера через запятую, "все" или "нет")
 ```
 
-`ID_SHORT` — первые 8 символов recording_id.
+`ID_SHORT` is the first 8 characters of `recording_id`.
 
-### Шаг 3. Получить выбор записей
+### Step 3. Get the user's selection
 
-- Пользователь вводит номера (`1, 3`), `все` или `нет`.
-- Если `нет` → «Реестр синхронизирован» и завершить (перейти к шагу 6 — export).
-- Если `все` → все записи со статусом `new`.
+- The user enters numbers (`1, 3`), `все` or `нет`.
+- If `нет` → print `Реестр синхронизирован` and finish (go to step 6 — export).
+- If `все` → every recording with status `new`.
 
-### Шаг 4. Собрать контекст для каждой выбранной записи
+### Step 4. Gather context for each selected recording
 
-Для каждой выбранной записи получи детали (участники с `ktalk_id`/`vault_id`):
+For each selected recording, get the details (participants with `ktalk_id` / `vault_id`):
 
 ```
 ktalk show <recording_id> --json
 ```
 
-**4.1. Сопоставить участников с профилями (для участников без `vault_id`).**
-Независимо друг от друга (недоступность одной не останавливает шаг — FR-24 плагина
-`ktalk`, ADR-012):
+**4.1. Match participants to profiles (for participants with no `vault_id`).** The two lookups
+are independent — the unavailability of one does not stop the step (FR-24 of the `ktalk`
+plugin, ADR-012):
 
-1. Если доступен `qmd` (наличие MCP-инструмента в сессии): поиск профиля —
+1. If `qmd` is available (the MCP tool is present in the session): look the profile up with
    `mcp__qmd__search(query="ktalk_id: \"N\"", collection="cto-people")`
-2. Если объявлен и существует `directories.people` (из шага 0): fallback —
-   `Grep(pattern="name: \".*Фамилия\"", path=<значение directories.people>, output_mode="content")`
-3. Если недоступны обе зависимости — пометить сопоставление недоступным, не
-   подставлять предположение об участнике; продолжить остальные шаги.
-4. Если профиль найден и в нём нет `ktalk_id` → добавить в frontmatter после `id:`.
-5. Зафиксировать связку в реестре:
+2. If `directories.people` is declared and exists (from step 0), fall back to
+   `Grep(pattern="name: \".*Фамилия\"", path=<the value of directories.people>, output_mode="content")`
+3. If neither dependency is available — mark the matching as unavailable, do not substitute a
+   guess about the participant, and carry on with the remaining steps.
+4. If the profile is found and holds no `ktalk_id` → add it to the frontmatter after `id:`.
+5. Record the binding in the registry:
    ```
    ktalk set-vault-id <recording_id> <ktalk_id> <vault_id>
    ```
-6. Если профиль не найден → оставить участника без `vault_id` (обработчик разберётся).
+6. If the profile is not found → leave the participant without a `vault_id` (the processor
+   will handle it).
 
-**4.2. Собрать контекст интерактивно** (до запуска агента):
+**4.2. Gather the context interactively** (before the agent is launched):
 
 ```
 📋 Встреча [N/M]: "{recording_name}"
@@ -171,22 +179,23 @@ ktalk show <recording_id> --json
 >
 ```
 
-**Автоопределение типа встречи:**
-- Содержит `🤝` или два имени через разделитель → `1-1`
-- Содержит «комитет», «архком», «committee» → `committee`
-- Содержит «стратегическ», «стратком», «strategy» → `session`
-- Содержит «стендап», «оперативн», «standup», «sync» → `standup`
-- Содержит «статус», «status» → `status`
-- Иначе → `other`
+**Automatic meeting-type detection** (the cues are Russian because the meeting titles are):
 
-**Автопредложения места сохранения** — из `routing.<meeting_type>` (шаблон конфига
-хозяина, шаг 0). Если для данного `meeting_type` ключ маршрута не объявлен —
-не предлагать путь автоматически, предложить только «Только транскрипт» и ручной
-ввод пути пользователем.
+- Contains `🤝` or two names separated by a delimiter → `1-1`
+- Contains `комитет`, `архком`, `committee` → `committee`
+- Contains `стратегическ`, `стратком`, `strategy` → `session`
+- Contains `стендап`, `оперативн`, `standup`, `sync` → `standup`
+- Contains `статус`, `status` → `status`
+- Otherwise → `other`
 
-### Шаг 5. Запустить агентов-обработчиков
+**Automatic save-location suggestions** come from `routing.<meeting_type>` (a template in the
+host's config, step 0). If no route key is declared for this `meeting_type`, do not suggest a
+path automatically — offer only `Только транскрипт` and manual path entry by the user.
 
-После сбора контекста — запускать агента **фоново** сразу, не дожидаясь завершения:
+### Step 5. Launch the processor agents
+
+Once the context is gathered, launch the agent **in the background** immediately, without
+waiting for it to finish:
 
 ```
 Agent("ktalk-processor", prompt="""
@@ -204,24 +213,27 @@ additional_context: |
 """, run_in_background=true)
 ```
 
-После каждого запуска:
+After each launch:
+
 ```
 ▶ Обработка запущена: "{название}" [фон]
 ```
 
-Затем сразу переходи к следующей встрече (шаг 4). После всех запусков:
+Then move straight on to the next meeting (step 4). After all the launches:
+
 ```
 ✅ Запущено N агентов. Уведомлю по завершении каждого.
 ```
 
-Агент сам переводит запись в `processing` в начале и в `done`/`partial` в конце
-через `ktalk mark-*` — skill в это не вмешивается. Раскладку каталогов агент
-получает так же, как этот skill — командой `ktalk config show --json`, не через
-параметры этого промта.
+The agent moves the record to `processing` at the start and to `done`/`partial` at the end
+itself, through `ktalk mark-*` — the skill does not interfere. The agent obtains the directory
+layout the same way this skill does, with `ktalk config show --json`, not through the
+parameters of this prompt.
 
-### Шаг 6. Обновить markdown-зеркало
+### Step 6. Refresh the markdown mirror
 
-После запусков (и при выборе `нет`) перегенерируй markdown-зеркало реестра:
+After the launches (and when the user chose `нет`), regenerate the markdown mirror of the
+registry:
 
 ```
 ktalk export
@@ -231,22 +243,22 @@ ktalk export
 ✅ Зеркало обновлено
 ```
 
-> После завершения фоновых агентов имеет смысл повторить `ktalk export`, чтобы
-> зеркало отразило новые `done`-записи.
+> Once the background agents have finished, it is worth repeating `ktalk export` so that the
+> mirror reflects the new `done` records.
 
-## Связанные инструменты
+## Related tools
 
-| Инструмент | Назначение |
-|-----------|-----------|
-| `ktalk config show --json` | Раскладка проекта-хозяина (реестр, каталоги, маршруты, интеграции) |
-| `ktalk sync` | Синхронизация + дедуп + экспирация + дашборд |
-| `ktalk dashboard` | Новые записи и статистика |
-| `ktalk show <id>` | Детали записи (участники, статусы, пути) |
-| `ktalk set-vault-id <id> <ktalk_id> <vault_id>` | Привязка профиля к участнику |
-| `ktalk export` | Регенерация markdown-зеркала реестра |
-| `ktalk-processor` агент | Обработка записи (транскрипт + обновление профилей/проектов) |
-| `ktalk get-transcript <id> --json` | Транскрипт по чанкам (`--chunk`, `--chunk-size`) |
-| `ktalk get-summary <id> --json` | Саммари и протокол встречи |
-| `references/registry-format.md` | Модель данных: SQLite + CLI |
-| `references/analysis-quality.md` | Инструкция по качеству анализа для агента |
-| `/find-person` | Поиск информации о человеке (навык проекта-хозяина, если установлен) |
+| Tool | Purpose |
+|------|---------|
+| `ktalk config show --json` | The host project's layout (registry, directories, routes, integrations) |
+| `ktalk sync` | Synchronisation + deduplication + expiration + dashboard |
+| `ktalk dashboard` | New recordings and statistics |
+| `ktalk show <id>` | Recording details (participants, statuses, paths) |
+| `ktalk set-vault-id <id> <ktalk_id> <vault_id>` | Bind a profile to a participant |
+| `ktalk export` | Regenerate the markdown mirror of the registry |
+| `ktalk-processor` agent | Process a recording (transcript + profile/project updates) |
+| `ktalk get-transcript <id> --json` | The transcript by chunks (`--chunk`, `--chunk-size`) |
+| `ktalk get-summary <id> --json` | The meeting's summary and protocol |
+| `references/registry-format.md` | The data model: SQLite + CLI |
+| `references/analysis-quality.md` | The analysis-quality instructions for the agent |
+| `/find-person` | Look up information about a person (a host-project skill, if installed) |

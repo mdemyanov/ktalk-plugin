@@ -1,13 +1,17 @@
-# Двухпроходный анализ транскрипта — детальный алгоритм
+# Two-pass transcript analysis — the detailed algorithm
 
-Reference-файл `ktalk-processor.md` (шаги 3.5/4 ядра). Пути и каталоги, на которые
-ссылается этот файл, приходят из `ktalk config show --json` (шаг 0б ядра) — здесь
-не зашиты.
+A reference file of `ktalk-processor.md` (core steps 3.5 and 4). The paths and directories
+this file refers to come from `ktalk config show --json` (core step 0b) — none are hard-coded
+here.
 
-Шкала `confidence` и защита от галлюцинаций — нормативно в
-`skills/ktalk-registry/references/analysis-quality.md` §6. Здесь не дублируется.
+The `confidence` scale and the safeguards against hallucination are normative in
+`skills/ktalk-registry/references/analysis-quality.md` §6. They are not duplicated here.
 
-## Формат сохраняемого файла транскрипта
+Russian literals below are of two kinds, and neither is translated: cues to look for in the
+transcript (the meeting is held in Russian, so the cue must be Russian to match), and section
+names written into the protocol (ADR-021 D1).
+
+## Format of the saved transcript file
 
 ```markdown
 ---
@@ -29,100 +33,115 @@ total_characters: M    # только для больших транскрипт
 {полный собранный транскрипт}
 ```
 
-Для маленьких транскриптов поля `chunked`, `total_chunks`, `total_characters` в
-frontmatter НЕ добавлять.
+For small transcripts, do NOT add the `chunked`, `total_chunks` and `total_characters` fields
+to the frontmatter.
 
-## Для маленьких транскриптов (не chunked)
+## For small transcripts (not chunked)
 
-Полный текст в контексте — анализ как обычно:
+The full text is in context — analyse as usual:
 
-**Проход 1 — ФАКТЫ** (с таймстампами из транскрипта):
-- Верифицировать каждый пункт саммари по транскрипту — найти таймкоды, точные формулировки
-- Что обсуждалось (структура разговора)
-- Явные решения: "решили", "договорились", "берёт", "закрываем"
-- Явные задачи: "сделать до", "взял на себя", "к следующей встрече"
-- Обновления статуса: "завершили", "готово", "отменили"
-- Найти факты, которых НЕТ в саммари — саммари может пропускать нюансы
+**Pass 1 — FACTS** (with timestamps from the transcript):
 
-**Проход 2 — ИНТЕРПРЕТАЦИЯ** (с confidence):
-- Фокус на том, что саммари пропустило: нюансы, настроение, неявные сигналы, конфликты
-- Это новое или обновление существующего? → проверить через доступную зависимость шага 0в (`qmd` или `directories.people`)
-- Confidence: HIGH (явно) / MEDIUM (выводится) / LOW (предположение)
-- Записывать только HIGH и MEDIUM
-- LOW → флаг [UNCLEAR] для пользователя
+- Verify every point of the summary against the transcript — find the timecodes and the exact
+  wording
+- What was discussed (the structure of the conversation)
+- Explicit decisions: `решили`, `договорились`, `берёт`, `закрываем`
+- Explicit tasks: `сделать до`, `взял на себя`, `к следующей встрече`
+- Status updates: `завершили`, `готово`, `отменили`
+- Find facts that are NOT in the summary — a summary can drop nuances
 
-## Для больших транскриптов (chunked) — Summary-first + On-demand
+**Pass 2 — INTERPRETATION** (with confidence):
 
-Транскрипт слишком велик для контекстного окна. Используй саммари как навигатор, чанки загружай целенаправленно.
+- Focus on what the summary missed: nuances, mood, implicit signals, conflicts
+- Is this new or an update to something existing? → check through whichever dependency of
+  core step 0c is available (`qmd` or `directories.people`)
+- Confidence: HIGH (explicit) / MEDIUM (inferred) / LOW (a guess)
+- Record only HIGH and MEDIUM
+- LOW → an `[UNCLEAR]` flag for the user
 
-**Проход 1 — ФАКТЫ (через саммари + целевые чанки):**
-- Саммари (из шага 2.5 ядра) — основной источник структурированных фактов
-- Для верификации каждого пункта саммари — загрузить целевой чанк:
+## For large transcripts (chunked) — summary-first + on-demand
+
+The transcript is too large for the context window. Use the summary as a navigator and load
+chunks deliberately.
+
+**Pass 1 — FACTS (through the summary plus targeted chunks):**
+
+- The summary (from core step 2.5) is the primary source of structured facts
+- To verify each point of the summary, load the targeted chunk:
   ```
   ktalk get-transcript {recording_id} --chunk N --json
   ```
-- Оценка номера чанка по таймстампу: `chunk_index ≈ (timestamp_sec / total_duration_sec) * total_chunks + 1`. Если промахнулся — проверить соседний чанк.
-- Не загружать все чанки — только те, где находятся интересующие моменты
-- Фиксировать все найденные факты с таймстампами и номерами чанков
+- Estimating the chunk number from a timestamp:
+  `chunk_index ≈ (timestamp_sec / total_duration_sec) * total_chunks + 1`. If the guess
+  misses, check the neighbouring chunk.
+- Do not load every chunk — only those holding the moments of interest
+- Record every fact found, with its timestamp and chunk number
 
-**Проход 2 — ИНТЕРПРЕТАЦИЯ (summary-directed selective loading):**
+**Pass 2 — INTERPRETATION (summary-directed selective loading):**
 
-1. Составить "карту покрытия" из Прохода 1:
-   - Какие чанки уже загружены и проанализированы
-   - Какие темы из саммари верифицированы
-   - Какие темы из саммари НЕ найдены в загруженных чанках
+1. Build a "coverage map" from Pass 1:
+   - Which chunks are already loaded and analysed
+   - Which topics from the summary are verified
+   - Which topics from the summary were NOT found in the loaded chunks
 
-2. Загрузить первый и последний чанк (если не загружены в Проходе 1) — начало (приветствие, повестка) и конец (итоги, wrap-up) часто содержат ключевые решения и обязательства.
+2. Load the first and the last chunk (if Pass 1 did not load them) — the opening (greeting,
+   agenda) and the ending (conclusions, wrap-up) often hold key decisions and commitments.
 
-3. Для непокрытых тем — загрузить целевые чанки (та же оценка номера, что выше).
+3. For uncovered topics — load the targeted chunks (the same estimate as above).
 
-4. Для уже загруженных чанков — повторно НЕ загружать. Использовать accumulated findings из Прохода 1.
+4. Do NOT reload chunks that are already loaded. Use the accumulated findings from Pass 1.
 
-5. Анализировать каждый загруженный чанк — фокус на том, что саммари пропустило: нюансы, настроение, неявные сигналы, конфликты.
+5. Analyse each loaded chunk — focus on what the summary missed: nuances, mood, implicit
+   signals, conflicts.
 
-6. Между чанками — переносить accumulated findings в краткой форме для контекста.
+6. Between chunks — carry the accumulated findings forward in condensed form, for context.
 
-**Ограничения:** Загружать не более 60% от total_chunks в Проходе 2. Если все темы покрыты раньше — остановиться.
+**Limits:** load at most 60% of `total_chunks` in Pass 2. If every topic is covered earlier,
+stop.
 
-- Confidence: HIGH (явно) / MEDIUM (выводится) / LOW (предположение)
-- Записывать только HIGH и MEDIUM
-- LOW → флаг [UNCLEAR] для пользователя
+- Confidence: HIGH (explicit) / MEDIUM (inferred) / LOW (a guess)
+- Record only HIGH and MEDIUM
+- LOW → an `[UNCLEAR]` flag for the user
 
-## Структурированное извлечение (checklist)
+## Structured extraction (checklist)
 
-После двух проходов — заполнить каждую категорию. Если категория пуста — явно написать "Нет".
+After the two passes — fill in every category. If a category is empty, write `Нет` explicitly.
 
-**A. Решения** (фильтр: явное "решили/договорились/берём" или директива руководителя):
-Для каждого:
-- Формулировка решения (макс. 2 предложения)
-- Кто принял (роль + имя)
-- Таймкод
+**A. `Решения`** (filter: an explicit `решили` / `договорились` / `берём`, or a manager's
+directive). For each:
+
+- The wording of the decision (at most 2 sentences)
+- Who made it (role + name)
+- Timecode
 - Confidence: HIGH/MEDIUM
-- Критерий успеха (если озвучен)
+- Success criterion (if stated)
 
-**B. Договорённости** (фильтр: конкретное действие + конкретный владелец):
-Для каждой:
-- Кто (имя)
-- Что (глагол + объект)
-- Срок (дата или "—")
+**B. `Договорённости`** (filter: a concrete action plus a concrete owner). For each:
+
+- Who (name)
+- What (verb + object)
+- Deadline (a date or `—`)
 - Confidence: HIGH/MEDIUM
 
-**C. Обновления статуса** (фильтр: "завершили/готово/отменили/сдвинулось"):
-Для каждого:
-- Что изменилось
-- Новый статус
-- Существующая запись (если есть — обновить, не дублировать)
+**C. `Обновления статуса`** (filter: `завершили` / `готово` / `отменили` / `сдвинулось`).
+For each:
 
-**D. Открытые вопросы** (всё с [UNCLEAR] + явно незавершённые темы):
-Для каждого:
-- Формулировка вопроса
-- Кто должен ответить (если понятно)
-- Таймкод
+- What changed
+- The new status
+- The existing entry (if there is one — update it, do not duplicate)
 
-**E. Флаги для владельца проекта** (только если он сам участник встречи —
-идентификатор владельца передаётся оркестратором в `additional_context`, если это
-применимо к проекту-хозяину):
-- Кандидаты в архитектурные решения (ADR)
-- Кадровые сигналы
-- Compliance/ИБ
-- Ресурсные решения
+**D. `Открытые вопросы`** (everything marked `[UNCLEAR]` plus explicitly unfinished topics).
+For each:
+
+- The wording of the question
+- Who is to answer (if clear)
+- Timecode
+
+**E. `Флаги для владельца проекта`** (only if the owner is a participant of the meeting
+themselves — the owner's identifier is passed by the orchestrator in `additional_context`,
+where that applies to the host project):
+
+- Candidates for architectural decisions (ADR)
+- Personnel signals
+- Compliance / information security
+- Resource decisions

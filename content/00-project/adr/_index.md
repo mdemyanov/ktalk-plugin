@@ -9,6 +9,8 @@ title: ADR
 
 - [ADR-020-agreements-reconciliation-scope.md](ADR-020-agreements-reconciliation-scope.md) —
   порог объёма и способ активации сверки открытых договорённостей
+- [ADR-021-prompt-language-boundary.md](ADR-021-prompt-language-boundary.md) —
+  языковая граница промт-слоя и способ пометки русских литералов
 
 ## Правила
 
