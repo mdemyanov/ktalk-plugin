@@ -8,9 +8,9 @@ Everything shown to the operator stays Russian; the instructions are English (AD
 
 ## Code 10 — the package is not installed
 
-Show the user the command verbatim and **do not run it yourself**:
-
-    uv tool install ktalk-mcp
+Show the user the command `check` printed verbatim and **do not run it yourself** — it names
+the pinned version explicitly (`uv tool install ktalk-mcp==<pin>`), not a bare package name
+that would resolve to whatever is newest.
 
 Verification after installation: `which ktalk-mcp` or `ktalk --help`.
 
@@ -41,20 +41,28 @@ cannot be executed in the current session. After fixing `PATH` (a new shell sess
 `uv` is missing, not `ktalk-mcp`. The plugin does not install `uv`. Tell the user that `uv`
 needs to be installed (https://docs.astral.sh/uv/) and repeat the check.
 
-## Code 11 — version below the minimum
+## Code 11 — installed version differs from the pin
 
-Report the installed version and the minimum version. An upgrade is a separate sanction:
+The plugin pins one exact `ktalk-mcp` version in `compat.json` (ADR-022) — a version that is
+older **or newer** than the pin is reported the same way, code 11. The remedy is a separate
+sanction (`allow_update`) either way: under an exact pin, "newer" is not automatically safe to
+overwrite — it may be a version someone installed on this machine for an unrelated task, and
+the remedy command reinstalls exactly the pin, which is a downgrade in that case.
 
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh grant update
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh install
 
 The user runs the first command. The agent never runs it: without a terminal it refuses
-(code 33). The agent runs the second one only after the upgrade sanction has been granted.
+(code 33). The agent runs the second one only after the update sanction has been granted.
+The install/update sanctions are not merged into one: installing where nothing existed
+creates state, while remedying an existing installation mutates state that may belong to
+someone else's unrelated task — the two are gated separately on purpose.
 
-After `install`, repeat `check`. `uv tool upgrade` prints "Nothing to upgrade" with exit
-code 0 when the index holds no newer version: `install` then also returns 11 and the version
-stays as it was. Repeating the installation in that case is pointless — tell the user that
-the index holds no compatible version.
+After `install`, repeat `check`. `uv tool install` prints "Already installed" with exit
+code 0 when the index already holds that exact version under a different local state (a
+stale cache, a reinstall of the same artifact): `install` then re-reads the version and still
+returns 11 if it did not actually change. Repeating the installation in that case is
+pointless — tell the user that the index does not offer the pinned version right now.
 
 Work can continue: a version mismatch is a warning, not a blocker. Some scenarios may not
 work.
@@ -62,10 +70,29 @@ work.
 ## Code 20 — internal plugin error
 
 The plugin's `compat.json` was not read: the file is missing, unreadable, or holds no
-`ktalk_mcp_min_version` key. The minimum version is unknown and there is nothing to check
-against. The action is to reinstall the plugin (`/plugin marketplace update ktalk-plugins`,
-then `/plugin install ktalk@ktalk-plugins`). The `message` field in the JSON carries the same
-action verbatim.
+`ktalk_mcp_version` key (including a `compat.json` that still only carries the retired
+`ktalk_mcp_min_version` key from before the pin). The pinned version is unknown and there is
+nothing to check against. The action is to reinstall the plugin (`/plugin marketplace update
+ktalk-plugins`, then `/plugin install ktalk@ktalk-plugins`). The `message` field in the JSON
+carries the same action verbatim.
+
+## Retired MCP tools — CLI equivalents
+
+The plugin declares no MCP server (ADR-022 D1): no `mcp__ktalk__*` tool is available to an
+operator's session as a side effect of installing this plugin. An operator who used to call
+one of those tools directly (outside any skill, ad hoc in a chat turn) reaches the same
+outcome through the CLI subcommand that already covers it:
+
+| Retired MCP tool | CLI equivalent |
+|---|---|
+| meeting-creation preview | `ktalk create-meeting-preview` |
+| meeting-cancellation preview | `ktalk cancel-meeting-preview` |
+| `ktalk_get_summary_by_type` | `ktalk get-summary-type` |
+
+The first two rows are named by role, not by the retired tool's literal identifier: those two
+identifiers are among the literals `scripts/check-plugin-composition.sh` forbids anywhere in
+the plugin tree (the `"MCP-имя операции встреч вместо CLI"` check label), including in
+documentation.
 
 ## Authorisation
 
@@ -78,8 +105,10 @@ If both are set, `KTALK_PERSONAL_API_KEY` wins and the session token is not read
 
 Where to get them: the personal API key — from the user profile in the Kontur Talk interface;
 the session token — from an active web-client session. Where to put them: an environment
-variable of the Claude Code process, or the host project's `.mcp.json` / `settings.json`.
-**Not** in a file inside the plugin tree, and not in `.ktalk.toml`.
+variable of the Claude Code process, or the host project's `settings.json`. The plugin declares
+no MCP server (ADR-022 D1), so there is no `.mcp.json` env block to put them in either the
+plugin's or the host project's tree. **Not** in a file inside the plugin tree, and not in
+`.ktalk.toml`.
 
 Checking the mode: `ktalk auth-status --json` — it prints the selected mode, never the secret
 value. Never ask for a token value to be pasted into the chat, and never print one.

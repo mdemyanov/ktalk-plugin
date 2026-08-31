@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "ktalk": {
-      "type": "stdio",
-      "command": "ktalk-mcp"
-    }
-  }
-}

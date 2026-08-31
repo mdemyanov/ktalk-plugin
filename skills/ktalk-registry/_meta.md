@@ -36,7 +36,6 @@ prompt_version: 2
 | ktalk-processor | agent | `../../agents/ktalk-processor.md` |
 | ktalk-evaluator | agent | `../../agents/ktalk-evaluator.md` |
 | ktalk-eval | skill | `../ktalk-eval/SKILL.md` |
-| ktalk MCP | mcp | the plugin's `.mcp.json` (secondary content-reading channel, host package ADR-012 §2a) |
 | Registry (data) | data | the path is resolved by `ktalk config show`, not hard-coded here |
 | Quality tracker (data) | data | the path is passed in the input parameters of `ktalk-eval` |
 
@@ -114,3 +113,14 @@ prompt_version: 2
 ### 2026-08-29 (issue #4, epic prompt-language-boundary)
 
 - Instructional prose translated to English; verbatim Russian output preserved (ADR-021)
+
+### 2026-08-31 (epic ktalk-plugin-4nk, DEV-002, ADR-022) — BREAKING
+
+- **Breaking:** the plugin no longer declares an MCP server for the `ktalk` circuit (`.mcp.json`
+  removed). "Related elements" above drops the `ktalk MCP` row — the secondary content-reading
+  channel it named no longer exists; the CLI is the sole path from this skill to the circuit
+- Operators who called a retired `mcp__ktalk__*` tool directly find the CLI equivalent in
+  `references/onboarding.md` ("Retired MCP tools — CLI equivalents")
+- Unrelated to this skill's own instructional prose — `prompt_version` is not bumped; the plugin's
+  minor version is (NFR-25, `.claude-plugin/plugin.json`), since the change touches a file under
+  `skills/ktalk-registry/`
