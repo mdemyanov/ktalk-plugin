@@ -1,4 +1,9 @@
-# Onboarding: the ktalk-mcp package
+# Onboarding: the ktalk-cli package
+
+The package was renamed from `ktalk-mcp` to `ktalk-cli` (ADR-024); `compat.json` names the
+current pin as a `package_name`/`package_version` pair, not a single version under a
+package-specific key. Any mention of `ktalk-mcp` below that is not explicitly about the retired
+identity refers to history, not the current pin.
 
 This file is read when `scripts/ktalk-onboard.sh check` returns a non-zero code. Token values
 are never requested, printed or written anywhere here — only the fact of configuration is
@@ -9,10 +14,10 @@ Everything shown to the operator stays Russian; the instructions are English (AD
 ## Code 10 — the package is not installed
 
 Show the user the command `check` printed verbatim and **do not run it yourself** — it names
-the pinned version explicitly (`uv tool install ktalk-mcp==<pin>`), not a bare package name
-that would resolve to whatever is newest.
+the pinned package and version explicitly (`uv tool install ktalk-cli==<pin>`), not a bare
+package name that would resolve to whatever is newest.
 
-Verification after installation: `which ktalk-mcp` or `ktalk --help`.
+Verification after installation: `which ktalk` or `ktalk --help`.
 
 If the user is willing to let the plugin install it, the sanction is granted by the user
 themselves, in their own terminal:
@@ -38,16 +43,18 @@ cannot be executed in the current session. After fixing `PATH` (a new shell sess
 
 ## Code 12 — no uv
 
-`uv` is missing, not `ktalk-mcp`. The plugin does not install `uv`. Tell the user that `uv`
-needs to be installed (https://docs.astral.sh/uv/) and repeat the check.
+`uv` is missing, not the pinned package. The plugin does not install `uv`. Tell the user that
+`uv` needs to be installed (https://docs.astral.sh/uv/) and repeat the check.
 
-## Code 11 — installed version differs from the pin
+## Code 11 — installed version differs from the pin (same package)
 
-The plugin pins one exact `ktalk-mcp` version in `compat.json` (ADR-022) — a version that is
-older **or newer** than the pin is reported the same way, code 11. The remedy is a separate
-sanction (`allow_update`) either way: under an exact pin, "newer" is not automatically safe to
-overwrite — it may be a version someone installed on this machine for an unrelated task, and
-the remedy command reinstalls exactly the pin, which is a downgrade in that case.
+The plugin pins one exact package identity — name and version — in `compat.json` (ADR-022,
+ADR-024). When the installed package's **name already matches** the pin but its version does
+not, either older **or newer** than the pin, that is reported the same way, code 11. The remedy
+is a separate sanction (`allow_update`) either way: under an exact pin, "newer" is not
+automatically safe to overwrite — it may be a version someone installed on this machine for an
+unrelated task, and the remedy command reinstalls exactly the pin, which is a downgrade in that
+case.
 
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh grant update
     bash ${CLAUDE_PLUGIN_ROOT}/scripts/ktalk-onboard.sh install
@@ -67,14 +74,44 @@ pointless — tell the user that the index does not offer the pinned version rig
 Work can continue: a version mismatch is a warning, not a blocker. Some scenarios may not
 work.
 
+## Code 13 — installed package is not the pinned package
+
+The command name `ktalk` resolves, but the package providing it is not the one `compat.json`
+pins by name (ADR-024) — for example `ktalk-mcp` is active while the pin names `ktalk-cli`, or
+vice versa after a rollback. This is reported separately from code 11 on purpose: "wrong
+package" and "right package, wrong version" call for different remedies, and conflating them
+would hide which one applies. The `check`/`install --json` output names both the active package
+and the pinned one explicitly. The remedy is the same command as code 11
+(`grant update` then `install`) — ADR-024 `D3` reuses the existing update sanction rather than
+adding a new one, since "the command already points at something else" already covers a
+different package, not only a different version of the same one.
+
+## Code 34 — the command-name slot is already claimed by the other package
+
+`uv tool install` refused (exit code 2, "Executable already exists") because the other known
+package identity already provides the `ktalk` command on this machine. The plugin **never**
+retries with `--force` — not on the default flow, not under any sanction — because that would
+be exactly the silent takeover the rename's collision requirement forbids. The message names
+both the package that was being installed and, where determinable, the one currently holding
+the slot. Resolving the collision is a deliberate, manual operator action, typed by hand in a
+terminal — not a plugin command and not something an agent should run without being asked
+explicitly:
+
+    uv tool install <target-package>==<target-pin> --force
+
+After running it by hand, run `check` again in the **same shell session** — `hash -r` may be
+needed if the shell cached the previous binary's path.
+
 ## Code 20 — internal plugin error
 
-The plugin's `compat.json` was not read: the file is missing, unreadable, or holds no
-`ktalk_mcp_version` key (including a `compat.json` that still only carries the retired
-`ktalk_mcp_min_version` key from before the pin). The pinned version is unknown and there is
-nothing to check against. The action is to reinstall the plugin (`/plugin marketplace update
-ktalk-plugins`, then `/plugin install ktalk@ktalk-plugins`). The `message` field in the JSON
-carries the same action verbatim.
+The plugin's `compat.json` was not read: the file is missing, unreadable, or is missing either
+of the two pin fields it needs — `package_name` and `package_version` (ADR-024 D1). This
+includes a `compat.json` that still only carries a retired key from before either rename
+(`ktalk_mcp_version`, or the earlier `ktalk_mcp_min_version`) — both fields are required
+together, so a leftover single-field pin from an older plugin version is treated the same as no
+pin at all. The pinned identity is unknown and there is nothing to check against. The action is
+to reinstall the plugin (`/plugin marketplace update ktalk-plugins`, then `/plugin install
+ktalk@ktalk-plugins`). The `message` field in the JSON carries the same action verbatim.
 
 ## Retired MCP tools — CLI equivalents
 

@@ -31,6 +31,11 @@ JTBD, функциональные и нефункциональные треб�
 - [2026-08-19-prompt-defect-channel.md](2026-08-19-prompt-defect-channel.md) — канал дефектов
   промта: секция отчёта `ktalk-eval` → issue репозитория плагина, порог 2+ записи (переезд из
   дерева пакета `ktalk-mcp`, ADR-023)
+- [2026-08-31-package-rename-transition.md](2026-08-31-package-rename-transition.md) —
+  переименование пакета `ktalk-mcp` в `ktalk-cli`: сохранение имени команды, порядок публикации,
+  версия-указатель, коллизия слота `uv tool`, санкция публикации (эпик `ktalk-plugin-foz`)
+- [2026-08-31-package-rename-transition/](2026-08-31-package-rename-transition/_index.md) —
+  тест-дизайн QA-001: покрытие 7 сценариев спеки, стабы `test-onboard.sh` (47–56)
 
 ## Правила
 

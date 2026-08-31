@@ -173,7 +173,7 @@ JSON, чтобы отличить «нет сервера» от «есть, н�
 
 | Requirement / Scenario | Как удовлетворяется |
 |---|---|
-| Default install excludes MCP-only dependency — все 4 сценария | Реализация в `pyproject.toml` пакета `ktalk-mcp`; вне этого дерева (собственный SA-процесс пакета) |
+| Default install excludes MCP-only dependency — все 4 сценария | Реализация в `pyproject.toml` пакета `ktalk-mcp`; вне этого дерева (собственный SA-процесс пакета). **Retired** (2026-08-31, `package-rename-transition`, ADR-024 Д6) — пакет снимает зависимость целиком, не extra'ом; см. `content/40-architecture/2026-08-31-package-rename-transition.md`, раздел «Retirement `cli-only-boundary`» |
 | No MCP server is declared | Удаление `.mcp.json` (раздел «Удаление `.mcp.json`»); новая статическая проверка в `check-plugin-composition.sh` (пробел, названный выше) |
 | An operator who previously called an MCP tool directly | Таблица «Retired MCP → CLI» выше, размещаемая в пользовательской документации Dev'ом |
 | Installed version differs from the pin | `version_eq` вместо `version_ge` в `cmd_check`/`finish_install` (раздел «Data flow» п.3, 6) |
@@ -269,7 +269,7 @@ JSON, чтобы отличить «нет сервера» от «есть, н�
 
 | Группа сценариев | Уровень | Обоснование |
 |---|---|---|
-| 4 сценария extra `fastmcp` (дерево пакета) | вне контракта | тестируются QA пакета `ktalk-mcp`, не этого дерева |
+| 4 сценария extra `fastmcp` (дерево пакета) | вне контракта | тестируются QA пакета `ktalk-mcp`, не этого дерева. **Retired** (2026-08-31, ADR-024 Д6) — предмет снят пакетом целиком, сценарии не будут исполнены ни на каком дереве |
 | No MCP server is declared | unit | статическая проверка файла/грепа, без сети и без подпроцессов |
 | An operator who previously called an MCP tool directly | unit + e2e | таблица и её защита от запрещённого литерала — unit; фактическое отсутствие `mcp__ktalk__*` в списке инструментов операторской сессии — платформенное поведение, не автоматизируется в этом репозитории, e2e/ручная проверка |
 | Installed version differs from the pin / remedy command names the exact version | integration | тот же приём `test-onboard.sh` — стаб `ktalk`/`uv`, реальный подпроцесс скрипта, не мок функции |

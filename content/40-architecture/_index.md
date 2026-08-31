@@ -16,6 +16,9 @@ title: Архитектура
 - [2026-08-31-plugin-requirements-relocation-at-design.md](2026-08-31-plugin-requirements-relocation-at-design.md) —
   тест-дизайн QA-001: 10 наблюдаемых исходов переезда (REL-1…REL-10), стаб
   `scripts/test-plugin-requirements-relocation.sh`
+- [2026-08-31-package-rename-transition.md](2026-08-31-package-rename-transition.md) —
+  переход `ktalk-mcp` → `ktalk-cli`: схема идентичности пакета в `compat.json`, коллизия слота
+  `uv tool`, схема отката, companion к ADR-024
 
 ## Правила
 

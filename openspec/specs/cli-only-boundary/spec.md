@@ -9,6 +9,13 @@ compatible with. The three properties SHALL move together: a default install SHA
 MCP-only dependency, the plugin SHALL declare no MCP interface, and the plugin's compatibility
 check SHALL treat an exact package version as the contract, not a floor.
 
+**Retirement note (2026-08-31, `package-rename-transition` epic, ADR-024 Д6).** The first of
+these three properties — a default install excludes the MCP-only dependency — is retired: the
+sibling package removes that dependency, its MCP entry point, and its dedicated tests entirely,
+rather than keeping any of them behind a named install option. See the retirement note under the
+Requirement below. The other two properties are unaffected and continue to govern this
+capability.
+
 ## Requirements
 
 ### Requirement: Default `ktalk-mcp` install excludes the MCP-only dependency
@@ -20,6 +27,15 @@ that makes a network call — without that option installed. The package's own d
 (the dependency group its contributors use to run its test suite) SHALL continue to include the
 MCP-only dependency, so that the part of the test suite covering the MCP layer keeps running
 unmodified.
+
+> **Retired (2026-08-31, `package-rename-transition` epic, ADR-024 Д6).** The premise of this
+> Requirement — an MCP-only dependency reachable through a separately named, optional install
+> option — no longer holds: the sibling package removes the dependency, its MCP entry point, and
+> its dedicated MCP test suite entirely, rather than keeping any of them behind an extra. None of
+> the four scenarios below remain exercisable by any test; they are kept verbatim as the record of
+> what this Requirement asked for when it was written, not as a live contract. The capability's
+> closest surviving live property is `The plugin declares no MCP interface surface` below, which
+> this retirement does not weaken.
 
 #### Scenario: CLI runs without the MCP-only dependency
 
