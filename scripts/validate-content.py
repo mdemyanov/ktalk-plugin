@@ -37,9 +37,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _validate_common import (
-    Issue, MalformedYamlError, issue_from_yaml_error,
+    Issue, MalformedYamlError, issue_from_yaml_error, enum_property_values,
     parse_frontmatter, parse_yaml_file, has_placeholder, PLACEHOLDER_RE, require_yaml,
+    _mask_code, check_absence_records,  # C20 (DEV-110, ADR-072 Д1) — тело вынесено, см. §ниже
+    grandfather_issue,  # C11 (DEV-123, ADR-078) — форма отчёта о потолке, общая двум веткам
 )
+from _conflict_markers import check_conflict_markers  # C19 (DEV-090) — вынесено, см. §ниже
 
 
 def check_property_names(content_dir: Path, doc_root: dict) -> list[Issue]:
@@ -69,13 +72,13 @@ def check_property_names(content_dir: Path, doc_root: dict) -> list[Issue]:
 
 
 def check_property_values(content_dir: Path, doc_root: dict) -> list[Issue]:
-    """C5: значения property из frontmatter входят в values: (для type: Enum)."""
-    enums = {
-        p["name"]: set(p.get("values") or [])
-        for p in doc_root.get("properties", [])
-        if isinstance(p, dict) and p.get("type") == "Enum" and "name" in p
-    }
-    issues = []
+    """C5: значения property из frontmatter входят в values: (для type: Enum).
+
+    Выборка и нормализация форм `values:` — `_validate_common.enum_property_values` (ишью
+    #11: объявленный `values:` при неканоническом `type` больше не молчит, форма `- name: X`
+    больше не роняет `set()`). Тело вынесено: ADR-063 Д5 — рост файла снимается разбиением.
+    """
+    enums, issues = enum_property_values(doc_root, str(content_dir / ".doc-root.yaml"))
     for md_path in content_dir.rglob("*.md"):
         if md_path.name == "_index.md":
             continue
@@ -198,6 +201,14 @@ def check_object_notation(content_dir: Path) -> list[Issue]:
                 if len(keys) == 1:
                     issues.append(Issue("error", str(md_path),
                         f"использует плоскую frontmatter-нотацию ({list(keys)[0]}: ...); требуется object-нотация (- name: X / value: [Y])"))
+                elif keys == {"id", "value"}:
+                    # id+value пишет веб-редактор Gramax (editor.nau.im/GES) при сохранении.
+                    # Решение не смягчается (issue #8: `gramax` 4.4.0 writer/SKILL.md:132 —
+                    # object-нотация единственная), смягчается лишь цена разбора у потребителя.
+                    issues.append(Issue("error", str(md_path),
+                        "использует нотацию id+value — так сохраняет статью веб-редактор Gramax "
+                        "(editor.nau.im); канон требует object-нотацию, сконвертируй в "
+                        "(- name: X / value: [Y])"))
                 else:
                     issues.append(Issue("error", str(md_path),
                         f"элемент properties должен иметь ровно ключи name+value (получено: {sorted(keys)})"))
@@ -310,44 +321,10 @@ def _resolve_link_target(base_dir: Path, target: str) -> Path:
     return literal
 
 
-# Забор код-блока: до 3 пробелов отступа, затем >= 3 бэктиков или тильд, затем info-строка.
-_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})(.*)$')
-# Inline-код: пробег из N бэктиков, содержимое, закрывающий пробег той же длины. Намеренно
-# в пределах одной строки: непарный бэктик в прозе иначе съел бы всё до следующего бэктика
-# где-то ниже по файлу и замаскировал бы настоящие ссылки между ними.
-_INLINE_CODE_RE = re.compile(r'(`+)([^\n]+?)\1')
-
-
-def _mask_code(text: str) -> str:
-    """Заменяет код (fenced-блоки и inline) пробелами, сохраняя длину строк и их число.
-
-    Статья, документирующая синтаксис Gramax-тега, содержит примеры вида
-    `<mermaid path="./file.mermaid"/>` как иллюстрации, а не как ссылки. Без этой маски
-    C9 требует существования файла из примера (ложный error), а C10 засчитывает пример
-    markdown-ссылки входящей ссылкой и «отбеливает» настоящую статью-сироту.
-
-    Маскирование заменой, не вырезанием: смещения в тексте сохраняются, поэтому соседний
-    с блоком настоящий линк находится там же, где и до маски.
-    """
-    out: list[str] = []
-    fence_char: str | None = None
-    fence_len = 0
-    for line in text.split("\n"):
-        m = _FENCE_RE.match(line)
-        if fence_char is None:
-            if m:
-                fence_char, fence_len = m.group(1)[0], len(m.group(1))
-                out.append(" " * len(line))
-            else:
-                out.append(line)
-            continue
-        # Внутри блока: закрывает только забор того же символа, не короче открывающего и
-        # без info-строки. Вложенный забор короче внешнего остаётся содержимым.
-        if m and m.group(1)[0] == fence_char and len(m.group(1)) >= fence_len \
-                and not m.group(2).strip():
-            fence_char, fence_len = None, 0
-        out.append(" " * len(line))
-    return _INLINE_CODE_RE.sub(lambda m: " " * len(m.group(0)), "\n".join(out))
+# _mask_code (fenced/inline-код -> пробелы) переехала в _validate_common.py DEV-090:
+# C19 (scripts/_conflict_markers.py) нуждается в той же маске, что C9/C10/C17, и импорт
+# ЕЁ ОТСЮДА в _conflict_markers.py создал бы цикл (validate-content.py уже импортирует
+# check_conflict_markers обратно). Общий носитель -- третье место, симметрично Issue.
 
 
 @dataclass
@@ -618,21 +595,65 @@ def _repo_relative(md_path: Path, content_dir: Path) -> str:
     return content_dir.name + "/" + str(md_path.relative_to(content_dir)).replace("\\", "/")
 
 
+# Закрытый набор ключей записи sizeBudgets (Д4, ADR-066): новый ключ каталога -- правь
+# набор тем же коммитом, иначе он молча попадёт под "ключ вне закрытого набора".
+_SIZE_BUDGET_ALLOWED_KEYS = {
+    "type", "thresholdLines", "quality", "qualityThreshold", "severity", "status",
+}
+
+
 def check_size_budget(content_dir: Path, doc_root: dict) -> list[Issue]:
-    """C11 (ADR-018): сигнал -- только при совместном срабатывании (BR-004)."""
-    entries = {
-        b["type"]: b
-        for b in (doc_root.get("sizeBudgets") or [])
-        if isinstance(b, dict) and b.get("type") and b.get("thresholdLines") is not None
-    }
+    """C11 (ADR-018): сигнал -- только при совместном срабатывании (BR-004).
+
+    Д4 (ADR-066): запись каталога без thresholdLines числом и без status: 'not measured',
+    либо с ключом вне закрытого набора -- error, не тихий выход из выборки. Симметрично
+    documentary_circuit_declaration (:711-731, ADR-031 Д3) -- опечатка в ключе не должна
+    молча выключать половину гейта.
+    """
+    issues: list[Issue] = []
+    entries: dict = {}
+    for b in (doc_root.get("sizeBudgets") or []):
+        if not isinstance(b, dict) or not b.get("type"):
+            continue
+        label = b["type"]
+        unknown = set(b) - _SIZE_BUDGET_ALLOWED_KEYS
+        for key in sorted(unknown):
+            issues.append(Issue("error", GATES_FILENAME,
+                f"sizeBudgets[{label!r}]: ключ {key!r} вне закрытого набора "
+                f"{sorted(_SIZE_BUDGET_ALLOWED_KEYS)} (ADR-066 Д4) -- добавь ключ в набор "
+                "тем же коммитом, если это не опечатка"))
+        threshold = b.get("thresholdLines")
+        has_threshold = isinstance(threshold, (int, float)) and not isinstance(threshold, bool)
+        has_status = b.get("status") == "not measured"
+        if not has_threshold and not has_status:
+            issues.append(Issue("error", GATES_FILENAME,
+                f"sizeBudgets[{label!r}]: ни thresholdLines числом, ни status: 'not measured' "
+                "-- запись не читается ни числовым порогом, ни объявленным отказом; опечатка в "
+                "ключе не должна тихо выключать половину гейта (ADR-066 Д4)"))
+            continue
+        if b.get("quality") == "longest_run_without_structure":
+            quality_threshold = b.get("qualityThreshold")
+            valid_quality_threshold = (
+                isinstance(quality_threshold, (int, float))
+                and not isinstance(quality_threshold, bool)
+                and quality_threshold > 0
+            )
+            if not valid_quality_threshold and not has_status:
+                issues.append(Issue("error", GATES_FILENAME,
+                    f"sizeBudgets[{label!r}]: quality='longest_run_without_structure' без "
+                    "валидного qualityThreshold (число > 0) и без status: 'not measured' -- "
+                    "вырожденный/отсутствующий порог не должен тихо гасить или ложно зажигать "
+                    "качественную половину пары (ADR-067 Д3, canon «An empty cell ... not "
+                    "permitted»)"))
+        if has_threshold:
+            entries[label] = b
     if not entries:
-        return []
+        return issues
     grandfathered = {
         g["path"]: g["ceiling"]
         for g in (doc_root.get("sizeBudgetGrandfathered") or [])
         if isinstance(g, dict) and "path" in g and "ceiling" in g
     }
-    issues = []
     for md_path in content_dir.rglob("*.md"):
         if md_path.name == "_index.md":
             continue
@@ -661,15 +682,9 @@ def check_size_budget(content_dir: Path, doc_root: dict) -> list[Issue]:
             if any(content_dir.rglob(f"{md_path.stem}-spec.md")):
                 continue  # качественный признак не провален -- тихий проход
             if ceiling is not None:
-                if lines <= ceiling:
-                    issues.append(Issue("warning", str(md_path),
-                        f"грандфазер: {lines} строк тела <= замороженного потолка {ceiling} "
-                        f"({rel}, ADR-018 Д5) -- не блокирует"))
-                else:
-                    issues.append(Issue("error", str(md_path),
-                        f"грандфазер-потолок превышен: {lines} строк тела > {ceiling} ({rel}). "
-                        f"Верни рост, или подними ceiling явной правкой sizeBudgetGrandfathered "
-                        f"в этом же коммите (ADR-018 Д5, прецедент GRANDFATHERED, ADR-013 Д1)."))
+                issues.append(grandfather_issue(str(md_path), rel, lines, ceiling,
+                    "ADR-018 Д5",
+                    "ADR-018 Д5, прецедент GRANDFATHERED, ADR-013 Д1"))
                 continue
             issues.append(Issue(level, str(md_path),
                 f"тело {lines} строк > T={threshold} (Тип контента: {type_value}); "
@@ -683,6 +698,11 @@ def check_size_budget(content_dir: Path, doc_root: dict) -> list[Issue]:
         quality_threshold = budget.get("qualityThreshold")
         if quality_threshold is None or run < quality_threshold:
             continue  # тихий проход
+        # Нарушитель подтверждён обоими признаками -- та же точка, что в ветке выше (ADR-078 Д1).
+        if ceiling is not None:
+            issues.append(grandfather_issue(str(md_path), rel, lines, ceiling,
+                "ADR-078", "ADR-078, ADR-064 Д3"))
+            continue
         issues.append(Issue(level, str(md_path),
             f"тело {lines} строк > T={threshold} (Тип контента: {type_value}), и самый длинный "
             f"участок без структуры (заголовок/таблица/<view>/<note>) -- {run} строк >= "
@@ -692,6 +712,11 @@ def check_size_budget(content_dir: Path, doc_root: dict) -> list[Issue]:
 
 
 GATES_FILENAME = ".nauta-gates.yaml"
+# ADR-072 Д1: собственный носитель записей «намеренно», не ключ в конфигурации гейтов —
+# та несёт десять чужих ADR-идентификаторов в провенанс-комментариях, и прибор записи мерил
+# бы на общем файле чужой провенанс. Читается тем же parse_yaml_file (C20, тело — в
+# _validate_common.check_absence_records, разбиение по ADR-063 Д5).
+ABSENCE_RECORDS_FILENAME = ".nauta-absence-records.yaml"
 
 
 def _load_gates(content_dir: Path) -> tuple[dict, list[Issue]]:
@@ -1135,10 +1160,15 @@ def _is_test_file(rel_posix: str) -> bool:
 
 
 def check_code_size_budget(repo_root: Path, gates: dict) -> list[Issue]:
-    """C13 (ADR-032): пара "строки файла + длиннейшая top-level декларация" для
-    `.py`/`.groovy`, тот же контракт BR-004, что уже несёт C11 для content/. Перечисление
-    файлов -- `git ls-files` (Д3), не `Path.rglob`. Отсутствие `codeSizeBudgets` в
-    конфигурации -- легитимный тихий skip (симметрично C11)."""
+    """C13 (ADR-032, ADR-063): качественный признак -- дизъюнкция двух качественных сигналов
+    (S1 "длиннейшая top-level декларация", S2 "число top-level деклараций"), пара BR-004 не
+    размыкается -- сигнал только если количественный (T) И хотя бы один качественный сработали.
+    S2 -- `declarationCountThreshold`/`quality2` (ADR-063 Д1/Д2, N_S=25 для `.py`); значение
+    `None`/отсутствие ключа выключает S2 тихо (`is not None`, не truthiness -- ADR-063 §7 "ловушка
+    `if not threshold`": `declarationCountThreshold: 0` обязан срабатывать). Тот же анкер `decl_re`
+    для S1 и S2 -- второй регэксп границ не заводится (ADR-063 Д1). Перечисление файлов --
+    `git ls-files` (Д3 ADR-032), не `Path.rglob`. Отсутствие `codeSizeBudgets` в конфигурации --
+    легитимный тихий skip (симметрично C11)."""
     entries = {
         (b["extension"], b["kind"]): b
         for b in (gates.get("codeSizeBudgets") or [])
@@ -1179,8 +1209,17 @@ def check_code_size_budget(repo_root: Path, gates: dict) -> list[Issue]:
         decl_re = PY_DECL_RE if ext == ".py" else GROOVY_DECL_RE
         decl_len = _longest_declaration_or_file(raw, decl_re)
         decl_threshold = budget["qualityThreshold"]
-        if decl_len < decl_threshold:
-            continue  # тихий проход -- контейнер (BR-003, пример: validate-profile.py)
+        s1_fired = decl_len >= decl_threshold
+        # ADR-063 Д1/Д2: S2 -- то же самое множество анкеров decl_re, второй счёт, не второй
+        # регэксп. `is not None` -- 0 обязан включать S2 (ADR-063 §7, ловушка truthiness).
+        count_threshold = budget.get("declarationCountThreshold")
+        ndecl = None
+        s2_fired = False
+        if count_threshold is not None:
+            ndecl = sum(1 for ln in raw.splitlines() if decl_re.match(ln))
+            s2_fired = ndecl >= count_threshold
+        if not (s1_fired or s2_fired):
+            continue  # тихий проход -- контейнер (BR-003/BR-004, оба качественных молчат)
         ceiling = grandfathered.get(rel)
         severity = budget.get("severity", "block")
         level = "error" if severity == "block" else "warning"
@@ -1195,11 +1234,24 @@ def check_code_size_budget(repo_root: Path, gates: dict) -> list[Issue]:
                     f"Разбей декларацию, верни рост, или подними ceiling явной правкой "
                     f"sizeBudgetGrandfathered в этом же коммите (ADR-032 Д7, ADR-018 Д5)."))
             continue
+        # ADR-063 §7/AC-13: сообщение называет, КАКОЙ качественный признак сработал -- S1
+        # ("длиннейшая декларация", действие "разбей декларацию") и/или S2 ("число деклараций",
+        # действие "вынеси декларации в модуль"). Диагноз, а не просто FAIL.
+        signs = []
+        if s1_fired:
+            signs.append(f"самая длинная top-level декларация -- {decl_len} строк "
+                          f">= T_S={decl_threshold}")
+        if s2_fired:
+            signs.append(f"число top-level деклараций -- {ndecl} >= N_S={count_threshold}")
+        signs_text = "; ".join(signs)
+        if s2_fired and not s1_fired:
+            action = "Вынеси декларации в отдельный модуль"
+        else:
+            action = "Разбей декларацию на части"
         issues.append(Issue(level, str(path),
-            f"{rel}: {lines} строк ({kind}) > T={threshold}, самая длинная top-level "
-            f"декларация -- {decl_len} строк >= T_S={decl_threshold}. Разбей декларацию на "
-            f"части, либо заведи sizeBudgetGrandfathered-запись (path: \"{rel}\") тем же "
-            f"коммитом (ADR-032, ADR-018 Д5)."))
+            f"{rel}: {lines} строк ({kind}) > T={threshold}, {signs_text}. {action}, либо "
+            f"заведи sizeBudgetGrandfathered-запись (path: \"{rel}\") тем же коммитом "
+            f"(ADR-032, ADR-018 Д5, ADR-063 Д1)."))
     return issues
 
 
@@ -1274,8 +1326,6 @@ def gate_config_provenance_lines(gates: dict, content_dir: Path | None = None) -
                 elif selected:
                     lines.append(f"{configured}; в выборке — {len(selected)} "
                                  f"{_files_plural(len(selected))}")
-                    for note in _role_prompt_grandfather_notes(content_dir.parent, gates):
-                        lines.append(f"  {note}")
                 else:
                     pattern = str(budget.get("pathGlob") or ROLE_PROMPT_DEFAULT_GLOB)
                     lines.append(f"{configured}; выборка пуста — под {pattern} файлов нет")
@@ -1340,9 +1390,12 @@ def check_prompt_layer_size_budget(repo_root: Path, gates: dict) -> list[Issue]:
     detail = "+".join(f"{n}={c}" for n, c in counts.items())
     if ceiling is not None:
         if total <= ceiling:
+            # ADR-064 Д2: `{PROMPT_LAYER_GRANDFATHER_KEY}` в скобках перед `ADR-032 Д7` --
+            # его читает регулярка провенанса фильтра AC-19 (DEV-089); без него сообщение не
+            # вычитается и красит живое дерево при активации грандфазера промт-слоя.
             return [Issue("warning", PROMPT_LAYER_GRANDFATHER_KEY,
                 f"грандфазер: сумма {total} ({detail}) <= замороженного потолка {ceiling} "
-                f"(ADR-032 Д7) -- не блокирует")]
+                f"({PROMPT_LAYER_GRANDFATHER_KEY}, ADR-032 Д7) -- не блокирует")]
         return [Issue("error", PROMPT_LAYER_GRANDFATHER_KEY,
             f"грандфазер-потолок превышен: сумма {total} ({detail}) > {ceiling}. Сократи "
             f"объём одного из файлов, верни рост, или подними ceiling явной правкой "
@@ -1370,36 +1423,6 @@ def _role_prompt_files(repo_root: Path, budget: dict) -> list[Path]:
         root = repo_root / base
         return sorted(root.rglob(tail)) if root.is_dir() else []
     return sorted(repo_root.glob(pattern))
-
-
-def _role_prompt_grandfather_notes(repo_root: Path, gates: dict) -> list[str]:
-    """Действующие потолки C18 — словами, в строке провенанса. Файл на потолке Issue не даёт
-    (см. `check_role_prompt_size_budget`), и без этой печати «проверено и чисто» стало бы
-    неотличимо от «нарушитель освобождён навсегда»."""
-    budget = gates.get(ROLE_PROMPT_BUDGET_KEY)
-    if not isinstance(budget, dict) or budget.get("thresholdLines") is None:
-        return []
-    grandfathered = {
-        g["path"]: g["ceiling"] for g in (gates.get("sizeBudgetGrandfathered") or [])
-        if isinstance(g, dict) and "path" in g and "ceiling" in g
-    }
-    notes = []
-    for path in _role_prompt_files(repo_root, budget):
-        try:
-            rel = path.relative_to(repo_root).as_posix()
-        except ValueError:
-            rel = path.as_posix()
-        ceiling = grandfathered.get(rel)
-        if ceiling is None:
-            continue
-        try:
-            lines = path.read_text(encoding="utf-8").count("\n")
-        except (OSError, UnicodeDecodeError):
-            continue
-        if lines > budget["thresholdLines"] and lines <= ceiling:
-            notes.append(f"грандфазер {rel}: {lines} строк <= замороженного потолка "
-                         f"{ceiling} (ADR-032 Д7) — не блокирует, рост сверх потолка краснеет")
-    return notes
 
 
 def check_role_prompt_size_budget(repo_root: Path, gates: dict) -> list[Issue]:
@@ -1447,14 +1470,14 @@ def check_role_prompt_size_budget(repo_root: Path, gates: dict) -> list[Issue]:
         ceiling = grandfathered.get(rel)
         if ceiling is not None:
             if lines <= ceiling:
-                # Файл НА замороженном потолке не даёт Issue вовсе -- ни error, ни warning
-                # (разрешено контрактом приёмки: at-ceiling ожидается в `([], ["warning"])`).
-                # Причина выбора пустого исхода, а не warning'а как у C14: живое дерево обязано
-                # держать `Errors: 0 | Warnings: 0` (замок `test_qa056_compaction_threshold_
-                # and_transfer.py::test_ac19_live_tree_stays_clean_after_the_transfer`), а
-                # грандфазер C18 на этом дереве заведён и постоянен. Молчаливым проход при
-                # этом НЕ становится: действующий потолок называет строка провенанса C18
-                # (`_role_prompt_grandfather_notes`) при каждом прогоне.
+                # ADR-064 Д1/Д2: файл НА замороженном потолке отчитывается ровно как у
+                # C11/C13/C14 -- `warning` с провенансом, не тишина. Довод прежнего молчания
+                # (замок `Errors: 0 | Warnings: 0` в test_qa056_…::test_ac19_…) снят
+                # DEV-089 (`4e4dfd8`): фильтр AC-19 вычитает по провенансу `{rel}` из скобок,
+                # не по буквальному нулю -- восстанавливать молчание «по прецеденту» не надо.
+                issues.append(Issue("warning", rel,
+                    f"грандфазер: {lines} строк <= замороженного потолка {ceiling} "
+                    f"({rel}, ADR-032 Д7, ADR-060 Д3) -- не блокирует"))
                 continue
             issues.append(Issue("error", rel,
                 f"грандфазер-потолок превышен: {lines} строк > {ceiling}. Сократи промт, "
@@ -1510,6 +1533,9 @@ def main(argv: list[str]) -> int:
     issues.extend(check_code_size_budget(repo_root, gates))          # C13 (ADR-032)
     issues.extend(check_prompt_layer_size_budget(repo_root, gates))  # C14 (ADR-032)
     issues.extend(check_role_prompt_size_budget(repo_root, gates))   # C18 (ADR-060)
+    # C20 (ADR-072 Д1) — наравне с C13/C14/C18: предмет лежит в корне, не в content/, и
+    # проверка обязана исполняться во всех трёх состояниях контура Д (Д4 ADR-041).
+    issues.extend(check_absence_records(repo_root / ABSENCE_RECORDS_FILENAME, repo_root))
 
     # Один битый файл видят несколько независимых rglob-проходов. Схлопываем ДО подсчёта:
     # `Errors: N` считается из списка, а не на печати (ADR-007 Д5).
@@ -1551,7 +1577,7 @@ def main(argv: list[str]) -> int:
 # константы; замок на её согласие с ФАКТИЧЕСКИМ составом вызовов внутри
 # `_content_side_issues` — `tests/test_dev048_s1_check_ids_enumeration.py` (AST-разбор
 # тела функции, не текстовый grep).
-S1_CHECK_IDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17)
+S1_CHECK_IDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 19)
 
 
 def _format_check_id_ranges(check_ids: tuple[int, ...]) -> str:
@@ -1600,6 +1626,7 @@ def _content_side_issues(content_dir: Path, gates: dict) -> list[Issue]:
     issues.extend(check_orphans(content_dir))        # C10 (ADR-014)
     issues.extend(check_index_no_properties(content_dir))
     issues.extend(check_index_registration(content_dir))  # C17 (DEV-046), пара C2
+    issues.extend(check_conflict_markers(content_dir))     # C19 (DEV-090)
     issues.extend(check_object_notation(content_dir))
     # Три проверки ниже читают декларацию из .doc-root.yaml. Исходы «файла нет» ({} —
     # декларации нет, проверки законно тривиальны) и «файл нечитаем» (error) различаются

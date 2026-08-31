@@ -241,6 +241,141 @@ def _candidate_files() -> tuple[list[str], str]:
     )
 
 
+_HISTORY_CACHE: dict = {}
+
+
+def _history_subjects():
+    """Темы коммитов истории HEAD (`git log --format=%s`) либо None, если истории нет.
+
+    Свидетель израсходованного номера — ТЕМА, не всё сообщение: тела коммитов цитируют чужие
+    номера прозой, а цитата расходом не является (Д6 ADR-038 — упоминание вне предмета).
+    Замер на дереве nauta (`3b9e3ec`): `--format='%B'` добавляет к множеству тем `NA-EPIC-02`,
+    `NA-EPIC-09` и обломок `NA-EPIC-3`, которых ни одна волна не расходовала.
+
+    Ref — HEAD, а не `--all`: `--all` втягивает локальные ветки соседних worktree и брошенные
+    эксперименты, и вывод гейта переставал бы воспроизводиться между клонами одного дерева.
+    Замер на `3b9e3ec`: множества HEAD и `--all` совпадают, поэтому цена выбора нулевая, а
+    воспроизводимость — нет.
+    """
+    if "subjects" in _HISTORY_CACHE:
+        return _HISTORY_CACHE["subjects"]
+    subjects = None
+    try:
+        proc = subprocess.run(
+            ["git", "log", "--format=%s", "HEAD"],
+            capture_output=True, text=True, timeout=120,
+        )
+        if proc.returncode == 0:
+            subjects = proc.stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        subjects = None
+    _HISTORY_CACHE["subjects"] = subjects
+    return subjects
+
+
+def _history_is_shallow() -> bool:
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def _consumed_without_home(entry: dict, found: list, retired: set):
+    """ВТОРОЕ НАПРАВЛЕНИЕ расхождения (DEV-120, NA-EPIC-37) → (violations, info_lines).
+
+    Номер израсходован волной — её коммиты стоят в истории, — а определения в доме нет
+    вовсе. Проверка `corpus_max > highwater` ловит только обратный перекос (номер в доме
+    есть, highwater не поднят); здесь корпус НЕ растёт, максимум не сдвигается, и краснеть
+    ей нечему по построению. Замер класса (на `300ed70`, до починки данных): номера в
+    истории до 36, корпус роадмапа 33, highwater 33, `bash scripts/id-check.sh` → «OK: 8
+    реестров проверено, чисто», при этом `bash scripts/next-id.sh na-epic --dry-run` → 34,
+    то есть аллокатор выдал бы уже израсходованный номер, и трижды подряд.
+
+    Дискриминатор — ОБЪЯВЛЕННОЕ ПОЛЕ `definition`, приём ADR-069 Д1 (там область перевели с
+    ярлыка `allocation` на объявленное поле записи). Отказ выражаем ровно у формы
+    `heading-anchored`: определение там — заголовок, который человек обязан НАПИСАТЬ
+    отдельным действием, и не написать его можно молча. У трёх остальных форм определением
+    служит сам артефакт (файл `ADR-NNN-*.md`, заголовок статьи, строка таблицы) — «номер
+    израсходован, а определения нет» там не конструируется.
+
+    Граница спутника названа, а не обойдена: ADR-038-spec §4.3 «Границы» несёт строку «Не
+    читает историю git: кладбище объявлено документом, а не восстанавливается из удалений».
+    Причина в ней названа и к этому чтению не относится — здесь история не восстанавливает
+    КЛАДБИЩЕ (оно по-прежнему только документ, и отменённые номера из проверки изымаются),
+    а служит свидетелем РАСХОДА номера. Правка формулировки границы передана SA отчётом
+    DEV-120 — сам спутник этой задачей не правится.
+
+    ПОЧЕМУ ОТДЕЛЬНАЯ ФУНКЦИЯ (DEV-121). Тело стояло в цикле НИЖЕ раннего выхода ступени 8/7
+    (`if not found: … continue`), и потому не выполнялось ровно в стартовом состоянии
+    потомка: `populated: false` — то, что `/nauta:init` пишет КАЖДОМУ пространству
+    (`templates/nauta-ids.yaml`, шесть записей, ни одной `populated: true`). Отказ:
+    потомок объявляет своё пространство эпиков `heading-anchored`, прогоняет первую волну
+    коммитом `feat(XX-EPIC-01): …`, заголовка не пишет → `found` пуст → «нечего проверять»
+    → rc 0 → `next-id.sh` выдаёт `01` повторно. Замер на стенде до правки: `id-check.sh` →
+    «OK: 1 реестров проверено, чисто», `next-id.sh xx-epic --dry-run` → `01`.
+
+    Выбор формы правки — вынос в функцию с двумя точками вызова, а НЕ перестановка блока и
+    не снятие `continue`. Довод: снятие `continue` включило бы на пустом корпусе ЗАОДНО и
+    сканирование корпуса на повторную выдачу отменённого номера, и проверку типа поля
+    `highwater` — обе читают корпус, которого нет, и обе к предмету этой задачи не
+    относятся. Вынос трогает ровно одну проверку. Кладбище на второй точке вызова всё же
+    читается — но как ВХОД этой проверки (изъятие отменённых номеров), и его нечитаемость
+    там называется тем же «не смог проверить», а не подменяется пустым множеством.
+
+    Пустой `prefix` отсекается: `re.escape("") + r"(\\d+)"` матчил бы КАЖДОЕ число каждой
+    темы коммита. До DEV-121 эта ветка была недостижима (`_match_heading_anchored` при
+    пустом префиксе не возвращает ничего, значит `found` пуст и цикл выходил раньше) —
+    новая точка вызова делает её достижимой, поэтому граница объявлена здесь явно.
+    """
+    ns = entry["namespace"]
+    prefix = entry.get("prefix") or ""
+    definition = entry.get("definition")
+    violations: list[str] = []
+    info_lines: list[str] = []
+    if definition != "heading-anchored" or not prefix:
+        return violations, info_lines
+
+    subjects = _history_subjects()
+    if subjects is None:
+        info_lines.append(
+            f"[INFO] расход номеров пространства '{ns}' по истории git не проверен — "
+            f"истории нет (не git-репозиторий либо git не в PATH). Форма "
+            f"`heading-anchored` определяется заголовком, который пишут отдельным "
+            f"действием, и «номер израсходован, заголовка нет» без истории "
+            f"неотличимо от «номер не выдавался»: исход назван, а не проглочен "
+            f"(ADR-007 Д1)."
+        )
+        return violations, info_lines
+
+    if _history_is_shallow():
+        info_lines.append(
+            f"[INFO] история git усечена (shallow-клон) — расход номеров "
+            f"пространства '{ns}' проверен по видимой части истории "
+            f"({len(subjects)} коммитов), не по всей."
+        )
+    witness: dict = {}
+    pat = re.compile(re.escape(prefix) + r"(\d+)")
+    for subject in subjects:
+        for m in pat.finditer(subject):
+            witness.setdefault(int(m.group(1)), subject)
+    defined = {int(token) for token, is_numeric, _p, _l, _role in found if is_numeric}
+    for number in sorted(witness):
+        if number in defined or number in retired:
+            continue
+        violations.append(
+            f"ERROR: номер израсходован мимо дома — {prefix}{number} встречается "
+            f"в теме коммита истории git («{witness[number]}»), но определения "
+            f"в home {entry.get('home')} у него нет. Форма '{definition}': номер "
+            f"существует для аллокатора только заголовком, и без заголовка "
+            f"следующая выдача повторит уже израсходованный номер."
+        )
+    return violations, info_lines
+
+
 def _graveyard_retired(entry: dict):
     """(retired_numbers, error_message_or_None). error non-None -> «не смог проверить»."""
     graveyard = entry.get("graveyard")
@@ -405,6 +540,35 @@ def main(argv: list[str]) -> int:
                 )
             else:
                 info_lines.append(f"[INFO] нечего проверять — пространство '{ns}' пусто по объявлению.")
+            # DEV-121: пустой корпус отменяет проверки, которые ЧИТАЮТ корпус, — но не
+            # проверку расхода номеров историей: там свидетель не корпус, а тема коммита,
+            # и «дом пуст» для неё не отсутствие данных, а сам предмет находки. Ровно этот
+            # `continue` выключал сторожа DEV-120 в стартовом состоянии потомка
+            # (`populated: false` пишет `/nauta:init` каждому пространству) — то есть в
+            # момент, когда отказ вероятнее всего. Оба исхода ступени 8/7 выше сохранены:
+            # они про утверждение реестра о непустоте корпуса, а не про историю.
+            # Дискриминатор повторён на месте вызова, а не оставлен только внутри функции:
+            # кладбище ниже читается ТОЛЬКО ради этой проверки, и читать его для форм, к
+            # которым проверка не применяется, значило бы завести новый красный там, где
+            # предмета нет. Замер цены до этой строки: свежее дерево потомка (`deliver.sh`
+            # + `/nauta:init`) краснело «кладбище номеров пространства 'adr' объявлено как
+            # content/00-project/adr/_index.md, но файла в дереве нет» — четыре падения в
+            # сьюте (`test_dev025_*` ×3, `test_dev030_*`), у записи формы `filename-prefix`.
+            if definition == "heading-anchored" and prefix and allocation != "external":
+                # `external` — тот же изъятый случай, что и ниже по циклу (Д2 ADR-069):
+                # у чужого аллокатора измеримого корпуса в этом дереве нет.
+                #
+                # Кладбище читается ЗДЕСЬ, а не ниже (ниже до него не доходит `continue`):
+                # отменённые номера — вход самой этой проверки, без них отменённая волна
+                # стала бы вечным красным. Нечитаемое объявленное кладбище называется тем
+                # же «не смог проверить», что и на общем пути: молча подставить пустое
+                # множество значило бы выдать непроверенное за проверенное.
+                retired_empty, grave_err = _graveyard_retired(e)
+                if grave_err:
+                    violations.append(f"ERROR: не смог проверить — {grave_err}")
+                v, i = _consumed_without_home(e, [], retired_empty)
+                violations.extend(v)
+                info_lines.extend(i)
             continue
 
         # Приоритет ролей opens/parens (§4.1b/ADR-044, ADR-038-spec §7 M13/M14): отдельный
@@ -479,7 +643,19 @@ def main(argv: list[str]) -> int:
                     f"не участвует в арифметике highwater, назван отдельно."
                 )
 
-        if allocation != "allocated":
+        # ADR-069 Д1/Д2: дискриминатор обеих проверок ниже — ОБЪЯВЛЕННОЕ ПОЛЕ записи
+        # (`highwater`/`graveyard`), а не ярлык `allocation`. Прежняя строка
+        # (`if allocation != "allocated": continue`) была шире любого записанного решения:
+        # §4.3 п.5/п.6 ADR-038-spec квалификатора по `allocation` не несут вовсе,
+        # ограничение на `allocated` есть только в §4.2 (ВЫДАЧА), где оно и уместно.
+        # Цена прежней строки замерена: три состояния живого реестра `tpl` (highwater
+        # 108/114/1) давали побайтово один выход и exit 0 — по этому предмету гейт был
+        # неотличим от своего отсутствия (§2 часть A ADR-069-spec).
+        #
+        # `external` — единственное исключение, и по НАЗВАННОЙ причине (Д2): у чужого
+        # аллокатора измеримого корпуса в этом дереве нет (`task`: `home: []`), сверять
+        # нечего. Это не та же причина, что была у `closed` («номера не выдаются»).
+        if allocation == "external":
             continue
 
         retired, grave_err = _graveyard_retired(e)
@@ -495,7 +671,24 @@ def main(argv: list[str]) -> int:
                     )
 
         highwater = e.get("highwater")
-        if highwater is not None:
+        if highwater is not None and (isinstance(highwater, bool)
+                                      or not isinstance(highwater, int)):
+            # Испорченный ввод РЕДАКТОРА реестра (ADR-069 §3, решение владельца 2026-08-26).
+            # До этой ветки нечисловой `highwater` давал `TypeError: '>' not supported between
+            # instances of 'int' and 'str'` и трейсбек: отказ громкий, но НЕ названный, а
+            # `gate-failure-semantics` знает ровно три названных исхода. Здесь — третий из них
+            # («не смог проверить»), и он называет ИМЯ записи и ИМЯ поля: вызывающий чинит
+            # реестр, а не читает про сравнение int и str. Д1 расширил достижимость случая с
+            # трёх `allocated`-записей на любую, куда поле впишут, — цена названа в
+            # Consequences ADR-069 («цена ошибки в реестре растёт»). `bool` отсекается
+            # отдельно: `True` — подкласс `int`, и `highwater: yes` сравнилось бы с корпусом
+            # как единица, то есть испорченная запись прошла бы проверку МОЛЧА.
+            violations.append(
+                f"ERROR: не смог проверить — поле `highwater` записи '{ns}' реестра "
+                f"{REGISTRY_PATH} прочитано как {highwater!r} ({type(highwater).__name__}), "
+                f"а не как целое число: расхождение с корпусом не вычислимо."
+            )
+        elif highwater is not None:
             corpus_max = max(
                 (int(token) for token, is_numeric, _p, _l, _role in found if is_numeric), default=0
             )
@@ -504,6 +697,14 @@ def main(argv: list[str]) -> int:
                     f"ERROR: расхождение реестра '{ns}' — highwater={highwater}, а максимум "
                     f"по корпусу corpus_max={corpus_max}: номер выдан в обход аллокатора."
                 )
+
+        # ВТОРОЕ НАПРАВЛЕНИЕ расхождения (DEV-120): номер израсходован волной, а
+        # определения в доме нет. Тело вынесено в `_consumed_without_home` (DEV-121) —
+        # точек вызова две, вторая стоит в ветке пустого корпуса ступени 8/7 выше.
+        # Довод, замеры класса и границы — в докстроке функции.
+        v, i = _consumed_without_home(e, found, retired)
+        violations.extend(v)
+        info_lines.extend(i)
 
     for line in info_lines:
         print(line)

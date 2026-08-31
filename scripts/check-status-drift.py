@@ -11,6 +11,24 @@
 Размерностей проверки две, и они независимы (ADR-008 Д1):
   A. читаемость  — известен ли статус каждой статьи. Git не нужен;
   B. залежалость — не стоит ли Draft/Review дольше --stale-days. Git нужен.
+У размерности A три исхода, не два, и ни один из них не молчит (ADR-007 Д1,
+`gate-failure-semantics`, «Three gate outcomes»): статус прочитан; frontmatter не читается
+(`[error]`, считается в «проверка не выполнена»); статус НЕ ОБЪЯВЛЕН. У третьего исхода четыре
+причины, и каждая называется своей строкой: frontmatter не объявлен вовсе; свойства «Статус»
+во frontmatter нет; свойство есть, список значений пуст (`value: []`); свойство есть, значение
+`null` (`value: null`, `value: [null]` — так пишет Gramax при нерезолвнутом регистре enum,
+issue #9, коммит `745c397`). Третий исход — «нечего проверять», а не «не смог проверить»:
+отсутствие «Статуса» законно по профилю (`content/.doc-root.yaml` обязательным его не
+объявляет, `validate-content.py` не требует). Поэтому он печатает [INFO], кода возврата не
+меняет и имеет собственный счётчик — сценарий «The refusal is declared explicitly» спеки
+(«the field is not declared, IS EMPTY, or no frontmatter is declared»): объявленный отказ
+обязан быть ОБЪЯВЛЕН строкой, а не тишиной. До DEV-119 такая статья уходила в `continue`
+молча: 68 статей из 398 на дереве базы `3b9e3ec` — число ПРИБОРА, замеренное прогоном по тому
+дереву. Греп по литералу (`grep -q "name: Статус"`, 93 файла, минус 26 `_index.md` явной ветки
+ниже) даёт 67 и врёт на единицу в свою пользу: `ADR-076-…-spec.md` цитирует саму команду
+замера в блоке кода, и литерал засчитывается статье, у которой свойства нет (DEV-119, DEV-121).
+Две причины из четырёх завёл уже DEV-121: `value: [null]` до него оставался тихим `continue`
+(список `[None]` истинен), а `value: []` печатался с чужой причиной «нет property».
 Предусловие вправе отменить только те проверки, которые от него зависят, поэтому
 размерность A выполняется всегда: и когда каталог вне рабочего дерева git, и когда в
 репозитории ещё нет ни одного коммита, и когда бинаря git нет в PATH. Ни одна из этих
@@ -164,12 +182,63 @@ def _last_commit_ts(path: Path) -> int | None:
         raise _GitCallFailed(f"git отдал не timestamp, а {out!r}") from e
 
 
+# Исход «статус не объявлен» размерности A. Форма строки — как у соседних исходов
+# (`<path>: <message>  [<level>]`), уровень INFO и код 0 — по таблице ADR-007 Д1, строка
+# «Осознанный отказ … тишина законна, но объявлена строкой». От `[error]`-исхода отличается
+# причиной, а не громкостью: там frontmatter НЕ ЧИТАЕТСЯ (не смог проверить), здесь он прочитан
+# и «Статуса» в нём нет по праву профиля (нечего проверять).
+NO_STATUS_TEMPLATE = (
+    "{path}: «Статус» не объявлен ({cause}) — на дрейф не проверяется; свойство не обязательно "
+    "по профилю, но исход обязан быть назван, а не пропущен молча  [INFO]"
+)
+NO_FRONTMATTER_CAUSE = "frontmatter не объявлен"
+NO_PROPERTY_CAUSE = "во frontmatter нет property «Статус»"
+# Причины DEV-121. Свойство ЕСТЬ, значения у него нет — и это не то же самое, что «свойства
+# нет»: сообщать про отсутствие property на статье, где она объявлена, значит утверждать о
+# статье неверное. Сценарий «The refusal is declared explicitly» перечисляет оба входа одним
+# исходом («the field is not declared, IS EMPTY, or no frontmatter is declared»), поэтому
+# уровень и код у всех четырёх причин общие, а строка — своя.
+EMPTY_VALUE_CAUSE = "property «Статус» объявлена, её список значений пуст"
+NULL_VALUE_CAUSE = "property «Статус» объявлена, её значение — null"
+
+
 def _status_values(fm: dict) -> list[str]:
     for p in (fm or {}).get("properties") or []:
         if isinstance(p, dict) and p.get("name") == "Статус":
             v = p.get("value")
             return v if isinstance(v, list) else [v]
     return []
+
+
+def _status_property_declared(fm: dict) -> bool:
+    """Объявлено ли во frontmatter само свойство «Статус» — независимо от его значения.
+
+    Второй проход по тому же списку, а не второе возвращаемое значение `_status_values`:
+    сигнатуру `_status_values` не трогает ни эта задача, ни ADR-008-spec («Не делать»:
+    «Не менять `STALE_STATUSES`, `_status_values`, критерий `ts < cutoff`»). Различить
+    «свойства нет» и «свойство есть, значения нет» без этого факта нельзя: у обоих входов
+    список объявленных значений пуст.
+    """
+    return any(
+        isinstance(p, dict) and p.get("name") == "Статус"
+        for p in (fm or {}).get("properties") or []
+    )
+
+
+def _no_status_cause(fm: dict, vals: list) -> str:
+    """Причина исхода «статус не объявлен» — одна из четырёх, ни одна не подменяет другую.
+
+    `value: null` и `value: [null]` дают `vals == [None]`: список ИСТИНЕН, поэтому до
+    DEV-121 такая статья не попадала ни под `not vals`, ни под пересечение со
+    `STALE_STATUSES` — уходила в `continue` молча при НЕИЗВЕСТНОМ статусе. Класс входа
+    штатный: `value: [null]` пишет Gramax, когда регистр значения enum в профиле не
+    резолвится (тело коммита `745c397`, issue #9).
+    """
+    if not fm:
+        return NO_FRONTMATTER_CAUSE
+    if not _status_property_declared(fm):
+        return NO_PROPERTY_CAUSE
+    return EMPTY_VALUE_CAUSE if not vals else NULL_VALUE_CAUSE
 
 
 def main(argv: list[str]) -> int:
@@ -224,7 +293,7 @@ def main(argv: list[str]) -> int:
               f"существует, проверка залежалости пропущена [INFO]")
 
     cutoff = time.time() - args.stale_days * 86400
-    warned = unreadable = no_history = 0
+    warned = unreadable = no_history = no_status = 0
     for md in content_dir.rglob("*.md"):
         if md.name == "_index.md":
             continue
@@ -236,9 +305,14 @@ def main(argv: list[str]) -> int:
             print(f"{e.path}: {e.message}  [error]")
             unreadable += 1
             continue
-        if not fm:
+        vals = _status_values(fm) if fm else []
+        # Критерий исхода — есть ли хоть одно ОБЪЯВЛЕННОЕ значение, а не непустой список:
+        # `[None]` (`value: null`, `value: [null]`) непуст, но статуса не несёт (DEV-121).
+        declared = [v for v in vals if v is not None]
+        if not declared:
+            print(NO_STATUS_TEMPLATE.format(path=md, cause=_no_status_cause(fm, vals)))
+            no_status += 1
             continue
-        vals = _status_values(fm)
         if not (set(vals) & STALE_STATUSES):
             continue
         if not git_ok:
@@ -259,6 +333,8 @@ def main(argv: list[str]) -> int:
 
     print(f"\nDrift candidates: {warned}")
     print(f"Статей, по которым проверка не выполнена: {unreadable}")
+    # Размерность A от git не зависит — число печатается всегда, как и предыдущее.
+    print(f"Статей без объявленного «Статуса»: {no_status}")
     if git_ok:
         # Без git размерность B не выполнялась — печатать по ней число значило бы
         # утверждать непроверенное.

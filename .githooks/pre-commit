@@ -22,16 +22,35 @@ SECRET_SCAN_ENABLED=true
 SECRET_SCAN_BINARY=gitleaks
 SECRET_SCAN_SOURCE="default (умолчание в коде .githooks/pre-commit; ключ secretScan в .nauta-gates.yaml не задан)"
 if [[ -f "$GATES_FILE" ]]; then
+  # Строгое значение (ADR-072 Д6, решение владельца Р3). awk печатает СТРОКУ-ПРИЗНАК
+  # `enabled=<значение>` всегда, когда ключ НАЙДЕН, — иначе «ключа нет» и «ключ задан,
+  # значение пустое» неразличимы: сегодня оба давали умолчание, и второй печатал ложный
+  # провенанс `default` при ЗАДАННОМ ключе (замер §5 спутника ADR-072).
   _v="$(awk '
     /^secretScan:[ \t]*(#.*)?$/ { inblk=1; next }
     inblk && $0 ~ /^[^ \t]/ { inblk=0 }
     inblk && $0 ~ /^[ \t]*enabled:/ {
       line=$0; sub(/^[ \t]*enabled:[ \t]*/, "", line)
       gsub(/[ \t]+$/, "", line); gsub(/^"/, "", line); gsub(/"$/, "", line)
-      print line; exit
+      print "enabled=" line; exit
     }
   ' "$GATES_FILE")"
   if [[ -n "$_v" ]]; then
+    _v="${_v#enabled=}"
+    # Признаются РОВНО два написания. `True`, `yes`, `on` — корректная YAML-истина
+    # (python3 -c "import yaml; yaml.safe_load('yes')" → True), которую awk-читатель молча
+    # превращал в «не true» и выключал самый дорогой гейт дерева; `flase` — опечатка того
+    # же класса исхода. Отказ, а не умолчание: ADR-007 Д1 — «не смог прочитать» ≠
+    # «нарушений нет».
+    if [[ "$_v" != "true" && "$_v" != "false" ]]; then
+      echo "ERROR: secretScan.enabled в .nauta-gates.yaml задан значением '$_v' — признаются" >&2
+      echo "ровно 'true' и 'false'. Сканирование секретов staged-diff НЕ выполнено, commit" >&2
+      echo "заблокирован: это не \"нет находок\" (ADR-007 Д1, ADR-072 Д6). Ключ задан, значит" >&2
+      echo "умолчание из кода здесь неприменимо — оно принадлежит только отсутствующему ключу." >&2
+      echo "Почини: впиши 'enabled: true' или 'enabled: false' (YAML-истины 'True'/'yes'/'on'" >&2
+      echo "здесь НЕ синонимы 'true'), либо убери ключ secretScan целиком." >&2
+      exit 1
+    fi
     SECRET_SCAN_ENABLED="$_v"
     SECRET_SCAN_SOURCE="configured (.nauta-gates.yaml, ключ secretScan)"
   fi
