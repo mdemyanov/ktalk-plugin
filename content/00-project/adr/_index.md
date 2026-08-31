@@ -13,6 +13,9 @@ title: ADR
   языковая граница промт-слоя и способ пометки русских литералов
 - [ADR-022-cli-only-boundary.md](ADR-022-cli-only-boundary.md) —
   снятие MCP-поверхности плагина, точный пин версии пакета, судьба санкции `grant update`
+- [ADR-023-plugin-requirements-relocation.md](ADR-023-plugin-requirements-relocation.md) —
+  переезд четырёх требований плагина из дерева пакета, пять capability, судьба трёх пересечений
+  с `cli-only-boundary`
 
 ## Правила
 

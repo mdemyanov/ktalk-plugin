@@ -19,6 +19,18 @@ JTBD, функциональные и нефункциональные треб�
   пакета `ktalk-mcp`, снятие MCP-поверхности плагина, пин точной версии (эпик `ktalk-plugin-4nk`)
 - [2026-08-31-cli-only-boundary/](2026-08-31-cli-only-boundary/_index.md) — тест-дизайн QA-001:
   покрытие 9 сценариев спеки, стабы `test-onboard.sh`
+- [2026-08-18-meetings-prompt-surface.md](2026-08-18-meetings-prompt-surface.md) — промт-
+  поверхность встреч: расписание, создание/отмена по санкции, поиск участника, диагностика
+  комнаты (переезд из дерева пакета `ktalk-mcp`, ADR-023, эпик `ktalk-plugin-56l`)
+- [2026-08-18-onboarding-sanctioned-install.md](2026-08-18-onboarding-sanctioned-install.md) —
+  обнаружение отсутствующего/несовместимого пакета и санкционированная установка (переезд из
+  дерева пакета `ktalk-mcp`, ADR-023)
+- [2026-08-19-analysis-quality-calibration.md](2026-08-19-analysis-quality-calibration.md) —
+  калибровка извлечения обязательств, confidence и маркировки имён в промте анализа (переезд из
+  дерева пакета `ktalk-mcp`, ADR-023)
+- [2026-08-19-prompt-defect-channel.md](2026-08-19-prompt-defect-channel.md) — канал дефектов
+  промта: секция отчёта `ktalk-eval` → issue репозитория плагина, порог 2+ записи (переезд из
+  дерева пакета `ktalk-mcp`, ADR-023)
 
 ## Правила
 

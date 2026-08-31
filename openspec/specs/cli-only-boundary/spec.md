@@ -53,7 +53,21 @@ unmodified.
 The plugin SHALL NOT declare an MCP server. No `mcp__ktalk__*` tool SHALL be exposed to the
 operator's session as a side effect of having this plugin installed. The CLI SHALL remain the sole
 supported way to reach the circuit from the plugin's prompt layer, continuing the direction already
-set for the plugin's own skills and agents.
+set for the plugin's own skills and agents. This property is not only a matter of declaration: the
+text of every skill, agent and command in the plugin's prompt layer SHALL be consistent with it —
+none SHALL describe or imply an MCP path to the `ktalk` circuit, for any operation, as a live or
+alternative channel (ADR-023 D3, generalising the narrower "no MCP name for a meeting operation"
+check this Requirement already absorbs). A prompt-layer file that still reads as though an MCP
+tool for this circuit exists or is a fallback is a violation of this Requirement even when the
+dependency declaration itself is already clean.
+
+#### Scenario: A prompt-layer file describes MCP as a live channel
+
+- **WHEN** the text of a skill, agent or command file describes an MCP tool of the `ktalk` circuit
+  as an available, comparable, or fallback way to perform an operation this plugin already covers
+  by CLI
+- **THEN** that text SHALL be treated as a violation of this Requirement, independently of whether
+  the plugin's dependency declaration itself names an MCP server
 
 #### Scenario: No MCP server is declared
 
