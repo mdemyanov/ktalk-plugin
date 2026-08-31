@@ -47,13 +47,25 @@ QA-author как N/A для сьюты онбординга (`at-design.md`, «A
 дерева»).
 
 1. **Обновить пин в дереве плагина** (после того, как `<PIN>` подтверждён опубликованным в
-   репозитории `ktalk-mcp`) —
-   `sed -i '' "s/\"ktalk_mcp_version\": \".*\"/\"ktalk_mcp_version\": \"<PIN>\"/" compat.json`
-   Успех: `cat compat.json` показывает ровно `<PIN>`, без второго ключа рядом.
-   Живая проверка (2026-08-31, изолированный scratch-клон, не рабочее дерево): команда
-   `sed -i '' "s/\"ktalk_mcp_version\": \".*\"/\"ktalk_mcp_version\": \"0.10.1\"/" compat.json`
-   на файле с `0.10.0` даёт файл с `0.10.1` — синтаксис подтверждён, реальный `compat.json`
-   дерева не трогался.
+   репозитории `ktalk-mcp`). Правится не только `compat.json` — `README.md` называет
+   сегодняшний пин буквально в шаге «Быстрый старт» (`uv tool install ktalk-mcp==<OLD_PIN>` и
+   комментарий `# ровно <OLD_PIN>`); не обновлённый вместе с пином README на следующем релизе
+   документирует команду, которую `check` тут же назовёт несовместимой —
+   ```bash
+   OLD_PIN="$(grep -Eo '"ktalk_mcp_version"[[:space:]]*:[[:space:]]*"[^"]+"' compat.json \
+              | head -1 | sed -E 's/.*"([^"]+)"[[:space:]]*$/\1/')"
+   sed -i '' "s/\"ktalk_mcp_version\": \".*\"/\"ktalk_mcp_version\": \"<PIN>\"/" compat.json
+   sed -i '' "s/${OLD_PIN//./\\.}/<PIN>/g" README.md
+   ```
+   Успех: `cat compat.json` показывает ровно `<PIN>`, без второго ключа рядом; `grep -n
+   "<PIN>" README.md` находит обе строки шага «Быстрый старт» (команда установки и
+   комментарий `# ровно`), а `grep -n "<OLD_PIN>" README.md` не находит ничего.
+   Живая проверка (2026-08-31, копии `compat.json`/`README.md` в изолированном
+   scratch-каталоге, не рабочее дерево): `OLD_PIN` считан как `0.10.0`; после команд
+   `compat.json` содержит `"ktalk_mcp_version": "0.11.0"`, а `README.md` — строки `uv tool
+   install ktalk-mcp==0.11.0` и `ktalk --version       # ровно 0.11.0 — …`; ни одного
+   оставшегося вхождения `0.10.0` в README. Реальные файлы репозитория не трогались — правка
+   `README.md` этим раундом закрывает Dev, здесь только доказан синтаксис команды рансбука.
 
 2. **Пред-релизная проверка — AC-9.** Убеждается, что `<PIN>` не просто существует в индексе,
    а установим (не yanked). Разбор ответа PyPI — парсером (`python3`/`json`), не текстовым
@@ -121,7 +133,7 @@ QA-author как N/A для сьюты онбординга (`at-design.md`, «A
 
 4. **Закоммитить пин и версию плагина, отметить тег** —
    ```bash
-   git add compat.json .claude-plugin/plugin.json
+   git add compat.json .claude-plugin/plugin.json README.md
    git commit -m "compat: pin ktalk-mcp <PIN>"
    git tag v<PLUGIN_VERSION>
    git push origin main --tags
@@ -164,7 +176,38 @@ QA-author как N/A для сьюты онбординга (`at-design.md`, «A
 пуша тега на `main`.
 
 1. Найти коммит(ы) релиза — `git log --oneline -5`.
-2. Отменить их на `main` — `git revert --no-edit <merge-or-release-commit-sha>`.
+2. **Отменить их на `main` — с учётом того, что `main` этого репозитория интегрируется
+   merge-коммитами (`git log --oneline --merges main`), а не fast-forward: голый `git revert
+   --no-edit <sha>` на merge-коммите отказывает («commit is a merge but no -m option was
+   given») — единственный путь назад не отрабатывает ровно на типичном коммите этой ветки.**
+   Число родителей отличает один случай от другого и решает, нужен ли `-m 1`:
+   ```bash
+   SHA=<merge-or-release-commit-sha>
+   PARENTS="$(git log -1 --format='%P' "$SHA" | wc -w | tr -d ' ')"
+   if [ "$PARENTS" -gt 1 ]; then
+     echo "merge-коммит ($PARENTS родителя) — revert -m 1"
+     git revert --no-edit -m 1 "$SHA"
+   else
+     echo "обычный коммит ($PARENTS родитель) — revert без -m"
+     git revert --no-edit "$SHA"
+   fi
+   ```
+   Успех: вывод называет тип коммита («merge-коммит» / «обычный коммит») и `git revert`
+   завершается новым коммитом отмены (`git log --oneline -1` показывает `Revert "..."`).
+
+   **Живая проверка (2026-08-31, две изолированные disposable-копии этого же репозитория —
+   `git clone` в scratch-каталог, не рабочее дерево, `git merge` этой роли запрещён ADR-036
+   Д5/Д6 и не понадобился: оба коммита уже существуют в реальной истории `main`):**
+   - Реальный merge-коммит `c70bc14` («Merge branch 'issue-4-en-prompt-layer' into 'main'»):
+     `PARENTS=2` → ветка `-m 1` → `git revert --no-edit -m 1 c70bc14` завершился коммитом
+     `f41b8a6 Revert "Merge branch 'issue-4-en-prompt-layer' into 'main'"`, exit `0`.
+   - Тот же `c70bc14` голым `git revert --no-edit c70bc14` (старая форма команды, без
+     определения родителей) — `error: commit ... is a merge but no -m option was given.`,
+     `fatal: revert failed`, exit `128`: старая форма подтверждённо не работает на этом
+     коммите, что и было находкой ревью.
+   - Обычный (не merge) коммит `7fbdc0d` из той же истории: `PARENTS=1` → ветка без `-m` →
+     `git revert --no-edit 7fbdc0d` завершился коммитом `97055f5 Revert "compat: пол
+     ktalk_mcp_min_version 0.10.0 (issue #3)"`, exit `0`.
 3. Если тег уже пушнут и указывает на дефектный коммит — снять его:
    `git push origin :refs/tags/v<BAD_VERSION> && git tag -d v<BAD_VERSION>`.
 4. Запушить откат — `git push origin main`.

@@ -42,14 +42,20 @@ remedy_cmd_array() { # remedy_cmd_array <пин> → заполняет глоб
 }
 
 installed_version() {
+  # Регэксп захватывает пре-релизный/билд-суффикс целиком (пре-релиз/билд-мета
+  # семвера, а также нестрогие формы вида "0.10.0rc1" без дефиса-разделителя),
+  # не только числовое ядро X.Y.Z — иначе rc-сборка теряет свой суффикс ДО
+  # того, как version_eq() успеет его увидеть, и молча признаётся равной пину
+  # (находка code review DEV-002 round 2, тест 42; version_eq сам по себе
+  # пре-релиз различает правильно, но получал уже урезанную строку).
   local out
   if out="$(ktalk --version 2>/dev/null)"; then
-    out="$(printf '%s' "$out" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+    out="$(printf '%s' "$out" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' | head -1)"
     if [ -n "$out" ]; then printf '%s\n' "$out"; return 0; fi
   fi
   if command -v uv >/dev/null 2>&1; then
     out="$(uv tool list 2>/dev/null | grep -E '^ktalk-mcp[[:space:]]' | head -1 \
-          | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' | head -1)"
     if [ -n "$out" ]; then printf '%s\n' "$out"; return 0; fi
   fi
   return 1
@@ -69,8 +75,15 @@ version_eq() { # version_eq A B → 0, если версии равны с уч�
   # именно ту гарантию, ради которой пин введён (BA-001 → ADR-022 Д3).
   local a_core="${1%%[-+]*}" b_core="${2%%[-+]*}"
   local a_pre='' b_pre=''
-  case "$1" in *-*) a_pre="${1#*-}"; a_pre="${a_pre%%+*}" ;; esac
-  case "$2" in *-*) b_pre="${2#*-}"; b_pre="${b_pre%%+*}" ;; esac
+  # Билд-метаданные ОБЯЗАНЫ быть отрезаны (%%+*) ДО поиска дефиса
+  # пре-релиза — находка code review DEV-002 round 2 (тест 43): дефис ищется
+  # по всей сырой строке, а он может лежать ВНУТРИ билд-метаданных
+  # ("0.10.0+build-1" — дефис в "build-1", это часть билд-меты, не
+  # пре-релиз). Semver §10 требует игнорировать билд-метаданные целиком,
+  # независимо от её собственного содержимого.
+  local a_before_build="${1%%+*}" b_before_build="${2%%+*}"
+  case "$a_before_build" in *-*) a_pre="${a_before_build#*-}" ;; esac
+  case "$b_before_build" in *-*) b_pre="${b_before_build#*-}" ;; esac
   local a b x y i
   IFS=. read -r -a a <<< "$a_core"
   IFS=. read -r -a b <<< "$b_core"

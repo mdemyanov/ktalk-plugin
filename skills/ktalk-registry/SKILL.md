@@ -49,8 +49,8 @@ The analysis-quality instructions: `references/analysis-quality.md`
   a machine default` — it is not a constant of this skill.
 - **The `ktalk` CLI** — deterministic mechanics and content reading (recordings, transcripts,
   summaries). Every command supports `--json` (valid JSON on stdout; errors on stderr with a
-  non-zero exit code). This is the primary call channel, not MCP (ADR-012 §2a of the
-  `ktalk-mcp` project).
+  non-zero exit code). This is the sole call channel from this skill to the circuit —
+  the plugin declares no MCP server (ADR-022 D1).
 - **The markdown mirror of the registry** — generated and read-only (`ktalk export`), at a
   path inside the host project. **Never edit it by hand and never parse it as a source.**
 

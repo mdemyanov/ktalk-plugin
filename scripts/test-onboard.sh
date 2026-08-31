@@ -478,5 +478,102 @@ for f in "$ROOT/README.md" "$ROOT/references/onboarding.md"; do
 done
 check_eq 1 "$DOC_HIT" "документация: таблица retired MCP → CLI перечисляет все три CLI-эквивалента в одном файле"
 
+### QA-001, раунд доработки — 5 дефектов code review, пропущенных прежней сьютой ###
+# Находки 1 и 5 обязаны идти через РЕАЛЬНЫЙ путь (cmd_check/cmd_install), не
+# прямым вызовом version_eq() — именно обход реального пути спрятал оба
+# дефекта в предыдущем раунде (тест 39 звал version_eq() напрямую).
+
+# 42 (находка 1 — пре-релизная гарантия отсутствует на реальном пути, AC-7).
+# installed_version() режет `ktalk --version` регуляркой [0-9]+\.[0-9]+\.[0-9]+
+# и теряет пре-релизный суффикс ДО того, как строка попадает в version_eq —
+# сравнение видит уже урезанное «0.10.0», не «0.10.0rc1»/«0.10.0-rc1», и
+# признаёт rc-сборку равной пину. Обе типографии из репро координатора.
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0rc1"
+"$SCRIPT" check >/dev/null 2>&1
+check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
+
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0-rc1"
+"$SCRIPT" check >/dev/null 2>&1
+check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0-rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
+
+# 43 (находка 5 — билд-метаданные с дефисом читаются как пре-релиз, AC-7).
+# version_eq(): `case "$1" in *-*)` смотрит на дефис ВО ВСЕЙ строке, а не в
+# части до "+" — билд-метаданные вида "+build-1" ошибочно принимаются за
+# пре-релиз "build-1" (semver §10 требует игнорировать билд-метаданные
+# целиком, независимо от её собственного содержимого). Тест 39 покрывал
+# только "+local" (без дефиса внутри) и не ловил этот случай. Реальный путь,
+# которым это достижимо, — значение ПИНА в compat.json: оно приходит в
+# version_eq сырым, без regex-фильтра (в отличие от installed_version()).
+# Зеркало дерева, как в тестах 37/38 — не правка реального compat.json.
+make_env
+MIRROR43="$TMP/mirror-build-meta"; mkdir -p "$MIRROR43/scripts"
+cp "$SCRIPT" "$MIRROR43/scripts/ktalk-onboard.sh"
+printf '{\n  "ktalk_mcp_version": "0.10.0+build-1"\n}\n' > "$MIRROR43/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
+"$MIRROR43/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 0 $? "check (реальный путь, пин с билд-метаданными 0.10.0+build-1): semver §10 — билд-метаданные игнорируются целиком, версии равны, код 0, не 11"
+
+# 44 (находка 2 — гейт состава проверяет меньше, чем требует AC-5). Спека:
+# «SHALL declare no MCP server for the ktalk circuit» — без оговорок про имя
+# файла и имя ключа. check_no_mcp_server() смотрит только на файл .mcp.json
+# и только на ключ, буквально совпадающий с "ktalk".
+
+# 44a: тот же сервер контура ktalk (команда ktalk-mcp) под ключом, не равным
+# буквально "ktalk", — гейт обязан заметить по команде/факту декларации, а
+# не только по точному имени ключа.
+MIRROR44A="$TMP/mirror-mcp-keyname"; cp -r "$ROOT" "$MIRROR44A"; rm -rf "$MIRROR44A/.git"
+cat > "$MIRROR44A/.mcp.json" <<'JSON'
+{
+  "mcpServers": {
+    "ktalk-mcp": {
+      "type": "stdio",
+      "command": "ktalk-mcp"
+    }
+  }
+}
+JSON
+bash "$MIRROR44A/scripts/check-plugin-composition.sh" >/dev/null 2>&1
+check_eq 1 $? "check-plugin-composition.sh: MCP-сервер контура ktalk под ключом \"ktalk-mcp\" (не буквально \"ktalk\") тоже обязан провалить гейт"
+
+# 44b: та же декларация лежит не в .mcp.json, а в другом файле состава
+# плагина (marketplace.json) — check_no_mcp_server() читает только .mcp.json.
+MIRROR44B="$TMP/mirror-mcp-otherfile"; cp -r "$ROOT" "$MIRROR44B"; rm -rf "$MIRROR44B/.git"
+python3 - "$MIRROR44B/.claude-plugin/marketplace.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["mcpServers"] = {"ktalk": {"type": "stdio", "command": "ktalk-mcp"}}
+json.dump(d, open(p, "w"), indent=2, ensure_ascii=False)
+PY
+bash "$MIRROR44B/scripts/check-plugin-composition.sh" >/dev/null 2>&1
+check_eq 1 $? "check-plugin-composition.sh: MCP-сервер контура ktalk, объявленный в marketplace.json (не .mcp.json), тоже обязан провалить гейт"
+
+# 45 (находка 3 — README рассинхронизируется с пином). Ранбук подъёма пина
+# правит только compat.json; README жёстко называет версию в команде
+# установки. Сегодня оба значения совпадают (0.10.0) — этот ассерт ЗЕЛЁНЫЙ на
+# неизменённом дереве, и это не пропуск дефекта: сам дефект — отсутствие
+# автоматической связи между файлами, а не расхождение значений сегодня.
+# Мутационное доказательство приложено в отчёте QA-author, не в составе
+# стаба: подъём пина в изолированной копии compat.json без правки README
+# переводит этот же ассерт в красное.
+PIN="$(grep -Eo '"ktalk_mcp_version"[[:space:]]*:[[:space:]]*"[^"]+"' "$ROOT/compat.json" | grep -Eo '[0-9][^"]*')"
+[ -n "$PIN" ]; check_eq 0 $? "compat.json: значение ktalk_mcp_version читается"
+grep -q "ktalk-mcp==$PIN" "$ROOT/README.md"
+check_eq 0 $? "README.md: команда установки называет ту же версию, что пин compat.json (сейчас $PIN) — регресс-guard на будущий подъём пина"
+
+# 46 (находка 6 — промт-слой противоречит собственному _meta.md). _meta.md
+# навыка ktalk-registry объявляет MCP-поверхность контура ktalk снятой
+# (".mcp.json removed"), но SKILL.md и agent-промт всё ещё описывают её как
+# живой канал для сравнения/альтернативу. Проверка целится в описание
+# СОБСТВЕННОГО MCP-сервера контура ktalk — упоминания стороннего инструмента
+# `qmd` (skills/ktalk-registry/SKILL.md:152, agents/ktalk-processor.md:107)
+# вне области этой находки и не затрагиваются.
+grep -q "not MCP" "$ROOT/skills/ktalk-registry/SKILL.md"
+check_eq 1 $? "SKILL.md: формулировка «primary call channel, not MCP» подразумевает MCP живой альтернативой — обязана уйти вместе со снятием MCP-поверхности (ADR-022 Д1, _meta.md)"
+
+grep -qF '`ktalk_get_transcript` MCP tool' "$ROOT/agents/ktalk-processor.md"
+check_eq 1 $? "ktalk-processor.md: контракт описан как «тот же, что у MCP tool ktalk_get_transcript» — ретированный инструмент контура ktalk назван в настоящем времени, будто ещё существует"
+
+
 printf '\nPASS: %s  FAIL: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
