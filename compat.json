@@ -1,3 +1,4 @@
 {
-  "ktalk_mcp_version": "0.10.0"
+  "package_name": "ktalk-cli",
+  "package_version": "1.0.0"
 }

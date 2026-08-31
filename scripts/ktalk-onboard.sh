@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Онбординг плагина ktalk: обнаружение пакета, санкция, установка.
-# Контракт — ADR-014-onboarding-spec.md в репозитории пакета ktalk-mcp.
+# Контракт — ADR-014-onboarding-spec.md в репозитории пакета (исторически
+# ktalk-mcp, с ADR-024 — ktalk-cli; идентичность самого пакета читается из
+# compat.json, не зашита литералом — см. pin_name()/pin_version() ниже).
 set -uo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,53 +14,112 @@ SANCTION_FILE="$CONFIG_DIR/onboarding.toml"
 # см. remedy_cmd_text/remedy_cmd_array ниже, вызываемые после pin_version()
 # (ADR-022 companion, «Точка правки: порядок инициализации»).
 
-E_OK=0; E_MISSING_CLI=10; E_OUTDATED=11; E_MISSING_UV=12; E_INTERNAL=20
+# Конечный список идентичностей пакета, известных за время перехода
+# ktalk-mcp → ktalk-cli (ADR-024 Д1/Д5) — используется ТОЛЬКО для распознавания
+# фактически установленного пакета (installed_identity() ниже), не для пина:
+# пин всегда приходит из compat.json (pin_name()), никогда не хардкодится.
+KNOWN_PACKAGE_NAMES=(ktalk-mcp ktalk-cli)
+
+E_OK=0; E_MISSING_CLI=10; E_OUTDATED=11; E_MISSING_UV=12; E_WRONG_PACKAGE=13
+E_INTERNAL=20
 E_NO_SANCTION=30; E_INSTALL_FAILED=31; E_NO_UPDATE_SANCTION=32; E_NO_TTY=33
+E_SLOT_COLLISION=34
 
 JSON=0
 
-pin_version() { # pin_version → печатает пин из compat.json либо отказывает
-  # Ключ compat.json — "ktalk_mcp_version", точный semver, не диапазон
-  # (ADR-022 Д3). Отсутствие ключа (в любой форме, включая старый
-  # "ktalk_mcp_min_version") — отказ, не молчаливый дефолт: нет пина —
-  # не с чем сравнивать (E_INTERNAL=20 у вызывающей стороны).
-  local raw
-  raw="$(grep -Eo '"ktalk_mcp_version"[[:space:]]*:[[:space:]]*"[^"]+"' "$COMPAT_FILE" 2>/dev/null \
-        | head -1 | sed -E 's/.*"([^"]+)"[[:space:]]*$/\1/')"
-  [ -n "$raw" ] || return 1
-  printf '%s\n' "$raw"
+pin_field() { # pin_field <ключ> — сырое значение строкового ключа верхнего уровня compat.json
+  grep -Eo "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]+\"" "$COMPAT_FILE" 2>/dev/null \
+    | head -1 | sed -E 's/.*"([^"]+)"[[:space:]]*$/\1/'
 }
 
-remedy_cmd_text() { # remedy_cmd_text <пин> → текст команды ремонта с явным пином
+pin_name() { # pin_name → печатает пинуемое ИМЯ пакета из compat.json либо отказывает
+  # ADR-024 Д1: идентичность пакета — пара package_name/package_version, оба
+  # поля обязательны ОДНОВРЕМЕННО (companion, «Синтаксис пина») — отсутствие
+  # ЛЮБОГО из двух (включая старые ключи ktalk_mcp_version/..._min_version,
+  # оставшиеся до этого перехода) есть «пина нет», не молчаливый дефолт.
+  local n v
+  n="$(pin_field package_name)"; v="$(pin_field package_version)"
+  [ -n "$n" ] && [ -n "$v" ] || return 1
+  printf '%s\n' "$n"
+}
+
+pin_version() { # pin_version → печатает пинуемую ВЕРСИЮ из compat.json либо отказывает
+  # Точный semver, не диапазон (ADR-022 Д3) — то же правило, распространённое
+  # на пару полей (ADR-024 Д1) вместо одного ключа с именем пакета внутри.
+  local n v
+  n="$(pin_field package_name)"; v="$(pin_field package_version)"
+  [ -n "$n" ] && [ -n "$v" ] || return 1
+  printf '%s\n' "$v"
+}
+
+remedy_cmd_text() { # remedy_cmd_text <версия-пина> → текст команды ремонта с явным именем и пином
   # Одна и та же команда для install и update (ADR-022 Д2): под точным пином
   # санкции разводят install/update по смыслу действия (создание состояния vs
   # мутация чужого), не по тексту команды — оба случая переустанавливают ровно
-  # версию пина, не "upgrade" на новейшую.
-  printf 'uv tool install ktalk-mcp==%s' "$1"
+  # версию пина, не "upgrade" на новейшую. Имя пакета — ПАРАМЕТР, читаемый из
+  # compat.json через pin_name(), не текстовый литерал (ADR-024, «Точка
+  # правки: литералы "ktalk-mcp" внутри функций» — тот же класс дефекта, что
+  # уже ударил версию в 0.8.0).
+  printf 'uv tool install %s==%s' "$(pin_name)" "$1"
 }
 
-remedy_cmd_array() { # remedy_cmd_array <пин> → заполняет глобальный REMEDY_CMD
-  REMEDY_CMD=(uv tool install "ktalk-mcp==$1")
+remedy_cmd_array() { # remedy_cmd_array <версия-пина> → заполняет глобальный REMEDY_CMD
+  REMEDY_CMD=(uv tool install "$(pin_name)==$1")
 }
 
-installed_version() {
-  # Регэксп захватывает пре-релизный/билд-суффикс целиком (пре-релиз/билд-мета
-  # семвера, а также нестрогие формы вида "0.10.0rc1" без дефиса-разделителя),
-  # не только числовое ядро X.Y.Z — иначе rc-сборка теряет свой суффикс ДО
-  # того, как version_eq() успеет его увидеть, и молча признаётся равной пину
-  # (находка code review DEV-002 round 2, тест 42; version_eq сам по себе
-  # пре-релиз различает правильно, но получал уже урезанную строку).
-  local out
+II_NAME=''; II_VERSION=''; II_REGISTERED_BOTH=0
+
+installed_identity() { # installed_identity → заполняет II_NAME/II_VERSION/II_REGISTERED_BOTH; 0 при успехе
+  # Расширение прежней installed_version(): разбирает ОБА токена вывода
+  # `ktalk --version` — "<имя-дистрибутива> <версия>" (кросс-репо контракт,
+  # ADR-024 companion «Точка правки: формат --version») — вместо того чтобы
+  # (как раньше) вырезать из вывода только цифры и отбрасывать имя. Регэксп
+  # версии захватывает пре-релизный/билд-суффикс целиком, не только числовое
+  # ядро X.Y.Z — иначе rc-сборка теряет свой суффикс ДО того, как version_eq()
+  # успеет его увидеть, и молча признаётся равной пину (находка code review
+  # DEV-002 round 2, тест 42).
+  #
+  # Резервный путь (ktalk отсутствует/не поддерживает --version, но uv есть)
+  # перебирает КОНЕЧНЫЙ список известных идентичностей, не один литерал: если
+  # видны ОБЕ известные строки одновременно — это диагностический признак
+  # registered_both (коллизия уже случилась ранее, вероятно, вручным --force),
+  # не отдельный статус отказа сам по себе (ADR-024 companion, Data flow п.2).
+  II_NAME=''; II_VERSION=''; II_REGISTERED_BOTH=0
+  local out name ver
   if out="$(ktalk --version 2>/dev/null)"; then
-    out="$(printf '%s' "$out" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' | head -1)"
-    if [ -n "$out" ]; then printf '%s\n' "$out"; return 0; fi
+    name="$(printf '%s' "$out" | awk '{print $1}')"
+    ver="$(printf '%s' "$out" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' | head -1)"
+    local known
+    for known in "${KNOWN_PACKAGE_NAMES[@]}"; do
+      if [ "$name" = "$known" ] && [ -n "$ver" ]; then
+        II_NAME="$name"; II_VERSION="$ver"; return 0
+      fi
+    done
   fi
   if command -v uv >/dev/null 2>&1; then
-    out="$(uv tool list 2>/dev/null | grep -E '^ktalk-mcp[[:space:]]' | head -1 \
-          | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' | head -1)"
-    if [ -n "$out" ]; then printf '%s\n' "$out"; return 0; fi
+    local list known hits=() hit
+    list="$(uv tool list 2>/dev/null)"
+    for known in "${KNOWN_PACKAGE_NAMES[@]}"; do
+      if printf '%s\n' "$list" | grep -Eq "^${known}[[:space:]]"; then
+        hits+=("$known")
+      fi
+    done
+    if [ "${#hits[@]}" -gt 1 ]; then
+      II_REGISTERED_BOTH=1
+      return 1
+    fi
+    if [ "${#hits[@]}" -eq 1 ]; then
+      hit="${hits[0]}"
+      ver="$(printf '%s\n' "$list" | grep -E "^${hit}[[:space:]]" | head -1 \
+            | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' | head -1)"
+      if [ -n "$ver" ]; then II_NAME="$hit"; II_VERSION="$ver"; return 0; fi
+    fi
   fi
   return 1
+}
+
+identity_eq() { # identity_eq <установленное-имя> <имя-пина> — точное совпадение имени дистрибутива
+  [ "$1" = "$2" ]
 }
 
 version_eq() { # version_eq A B → 0, если версии равны с учётом пина (ADR-022 Д3)
@@ -106,45 +167,65 @@ json_escape() { # json_escape <строка> — экранирует \, ", CR, 
   printf '%s' "$s"
 }
 
-report() { # report <status> <installed> <pin> <message> [cmd_text]
-  # JSON-ключ поля остаётся "min_version" сознательно (companion-статья,
-  # «Синтаксис пина»): то же минимально-рискованное решение, каким там
-  # оставлен статус "outdated" для обеих сторон расхождения — не множить
-  # изменения во внешней поверхности `--json`, которую уже читает
-  # test-onboard.sh и любой внешний потребитель, ради переименования поля,
-  # которое ни один сценарий не проверяет по имени.
-  local cmd_text="${5:-}"
+report() { # report <status> <installed_pkg> <installed_ver> <pin_pkg> <pin_ver> <message> [cmd_text] [extra_json]
+  # JSON-ключи "installed_version"/"min_version" остаются сознательно
+  # (companion-статья, «Синтаксис пина»): то же минимально-рискованное
+  # решение, каким там оставлен статус "outdated" для обеих сторон
+  # расхождения — не переименовывать поле, которое уже читает test-onboard.sh
+  # и любой внешний потребитель. "installed_package"/"pinned_package" —
+  # НОВЫЕ поля, добавленные аддитивно (ADR-024 companion, «Consequences»).
+  # [extra_json] — необязательный, уже сформированный JSON-фрагмент вида
+  # ',"registered_both":true' — вставляется как есть (тот же приём, что
+  # install_report уже применяет к first_attempt_output).
+  local status="$1" ipkg="$2" iver="$3" ppkg="$4" pver="$5" msg="$6" \
+        cmd_text="${7:-}" extra="${8:-}"
   if [ "$JSON" -eq 1 ]; then
-    printf '{"status":"%s","installed_version":"%s","min_version":"%s","install_command":"%s","message":"%s"}\n' \
-      "$(json_escape "$1")" "$(json_escape "$2")" "$(json_escape "$3")" "$(json_escape "$cmd_text")" "$(json_escape "$4")"
+    printf '{"status":"%s","installed_version":"%s","min_version":"%s","installed_package":"%s","pinned_package":"%s","install_command":"%s"%s,"message":"%s"}\n' \
+      "$(json_escape "$status")" "$(json_escape "$iver")" "$(json_escape "$pver")" \
+      "$(json_escape "$ipkg")" "$(json_escape "$ppkg")" "$(json_escape "$cmd_text")" \
+      "$extra" "$(json_escape "$msg")"
   else
-    printf '%s\n' "$4"
+    printf '%s\n' "$msg"
   fi
 }
 
 cmd_check() {
-  local pin installed remedy_text
+  local pin pin_n remedy_text
   if ! pin="$(pin_version)"; then
-    report error "" "" "Не прочитан compat.json плагина — переустановите плагин." ""
+    report error "" "" "" "" "Не прочитан compat.json плагина — переустановите плагин." ""
     return "$E_INTERNAL"
   fi
+  pin_n="$(pin_name)"
   remedy_text="$(remedy_cmd_text "$pin")"
   if ! command -v ktalk >/dev/null 2>&1; then
     if ! command -v uv >/dev/null 2>&1; then
-      report missing_uv "" "$pin" "Не найден uv. Установите uv, затем: $remedy_text" "$remedy_text"
+      report missing_uv "" "" "$pin_n" "$pin" "Не найден uv. Установите uv, затем: $remedy_text" "$remedy_text"
       return "$E_MISSING_UV"
     fi
-    report missing_cli "" "$pin" "Пакет ktalk-mcp не установлен. Команда установки: $remedy_text" "$remedy_text"
+    report missing_cli "" "" "$pin_n" "$pin" "Пакет $pin_n не установлен. Команда установки: $remedy_text" "$remedy_text"
     return "$E_MISSING_CLI"
   fi
-  installed="$(installed_version)" || installed=""
-  if [ -z "$installed" ] || ! version_eq "$installed" "$pin"; then
-    report outdated "$installed" "$pin" \
-      "Версия пакета (${installed:-неопределима}) не совпадает с требуемой версией $pin. Ремонт: $remedy_text" \
+  if ! installed_identity; then
+    local extra=''
+    if [ "$II_REGISTERED_BOTH" -eq 1 ]; then extra=',"registered_both":true'; fi
+    report identity_unknown "" "" "$pin_n" "$pin" \
+      "Идентичность установленного пакета не распознана штатным способом (ktalk --version и uv tool list). Ремонт: $remedy_text" \
+      "$remedy_text" "$extra"
+    return "$E_OUTDATED"
+  fi
+  if ! identity_eq "$II_NAME" "$pin_n"; then
+    report wrong_package "$II_NAME" "$II_VERSION" "$pin_n" "$pin" \
+      "Установлен пакет $II_NAME ($II_VERSION), а согласно compat.json требуется $pin_n $pin. Ремонт: $remedy_text" \
+      "$remedy_text"
+    return "$E_WRONG_PACKAGE"
+  fi
+  if ! version_eq "$II_VERSION" "$pin"; then
+    report outdated "$II_NAME" "$II_VERSION" "$pin_n" "$pin" \
+      "Версия пакета (${II_VERSION}) не совпадает с требуемой версией $pin. Ремонт: $remedy_text" \
       "$remedy_text"
     return "$E_OUTDATED"
   fi
-  report ok "$installed" "$pin" "Пакет ktalk-mcp $installed установлен, версия совместима." "$remedy_text"
+  report ok "$II_NAME" "$II_VERSION" "$pin_n" "$pin" "Пакет $pin_n $II_VERSION установлен, версия совместима." "$remedy_text"
   return "$E_OK"
 }
 
@@ -273,13 +354,15 @@ run_install() { # run_install <текст команды для пользова
   return "$E_OK"
 }
 
-install_report() { # install_report <status> <installed> <min> <message> <cmd_text>
+install_report() { # install_report <status> <installed_pkg> <installed_ver> <pin_pkg> <pin_ver> <message> <cmd_text>
   # Тот же набор полей, что у report(), плюс телеметрия запуска менеджера пакетов.
   # Поля attempts/return_code/uv_output печатаются на ЛЮБОМ исходе (DEV-007 дефект 2,
   # ADR-014-onboarding-spec §1) — включая ветки, где менеджер не запускался (нет
   # санкции, нет uv, нужна отдельная санкция на обновление, пакет уже свежий):
   # attempts=0, return_code=null, uv_output="" — честные значения «менеджер не
-  # запускался», не пропуск полей.
+  # запускался», не пропуск полей. installed_package/pinned_package — те же
+  # новые поля, что у report() (ADR-024, аддитивно).
+  local status="$1" ipkg="$2" iver="$3" ppkg="$4" pver="$5" msg="$6" cmd_text="$7"
   if [ "$JSON" -eq 1 ]; then
     local attempts=0 rc_field=null tail=''
     if [ "$RI_RAN" -eq 1 ]; then
@@ -290,88 +373,126 @@ install_report() { # install_report <status> <installed> <min> <message> <cmd_te
         tail="$(printf ',"first_attempt_output":"%s"' "$(json_escape "$RI_FIRST_OUT")")"
       fi
     fi
-    printf '{"status":"%s","installed_version":"%s","min_version":"%s","install_command":"%s","attempts":%s,"return_code":%s,"uv_output":"%s"%s,"message":"%s"}\n' \
-      "$(json_escape "$1")" "$(json_escape "$2")" "$(json_escape "$3")" "$(json_escape "$5")" \
-      "$attempts" "$rc_field" "$(json_escape "$RI_OUT")" "$tail" "$(json_escape "$4")"
+    printf '{"status":"%s","installed_version":"%s","min_version":"%s","installed_package":"%s","pinned_package":"%s","install_command":"%s","attempts":%s,"return_code":%s,"uv_output":"%s"%s,"message":"%s"}\n' \
+      "$(json_escape "$status")" "$(json_escape "$iver")" "$(json_escape "$pver")" \
+      "$(json_escape "$ipkg")" "$(json_escape "$ppkg")" "$(json_escape "$cmd_text")" \
+      "$attempts" "$rc_field" "$(json_escape "$RI_OUT")" "$tail" "$(json_escape "$msg")"
   else
-    printf '%s\n' "$4"
+    printf '%s\n' "$msg"
   fi
+}
+
+is_slot_collision() { # is_slot_collision <код возврата uv> <захваченный вывод uv>
+  # Замер BA на синтетических пакетах: `uv tool install` отказывает кодом 2 и
+  # текстом "Executable already exists" именно и только когда слот команды
+  # уже занят ДРУГИМ пакетом (ADR-024 Д3) — распознаётся текстом, не
+  # предугадывается заранее опросом `uv tool list` (список ненадёжен именно в
+  # этом состоянии, companion «Форма коллизии слота»).
+  [ "$1" -eq 2 ] 2>/dev/null && printf '%s' "$2" | grep -qi 'executable already exists'
+}
+
+report_slot_collision() { # report_slot_collision <имя-пина> <версия-пина> <текст ремонта>
+  # Никогда не добавляет --force и не повторяет попытку (ADR-024 Д3) — только
+  # называет обе стороны коллизии: пакет, который пытались поставить (пин), и
+  # (если определим) пакет, реально удерживающий слот сейчас.
+  local pin_n="$1" pin="$2" remedy_text="$3" active=''
+  if installed_identity; then active="$II_NAME"; fi
+  install_report slot_collision "${active}" "" "$pin_n" "$pin" \
+    "Слот команды ktalk уже занят пакетом ${active:-другим пакетом} — установка $pin_n $pin остановлена без изменения состояния системы. Автоматическая принудительная замена (--force) не выполняется ни при какой санкции; это ручное действие оператора." \
+    "$remedy_text"
 }
 
 finish_install() { # finish_install <пин> — постусловие установки/ремонта (FR-31)
   # Код возврата менеджера пакетов не является доказательством совместимости:
   # `uv tool install` печатает «Already installed»/«Nothing to upgrade» с
   # кодом 0, а индекс может отдавать версию, не равную пину. Постусловие
-  # перечитывает версию тем же предикатом равенства, что и cmd_check —
+  # перечитывает идентичность тем же предикатом, что и cmd_check —
   # verb-агностично: install и update ветки зовут одну и ту же команду ремонта
   # (ADR-022 Д2), поэтому единственный параметр здесь — пин, текст команды
-  # вычисляется внутри.
+  # и имя пакета вычисляются внутри.
   #
   # Предикат выровнен с cmd_check (DEV-007, дефект 1), а не наоборот: успех install
   # требует того же — `command -v ktalk` — что и первый гейт check, не только
-  # installed_version() с fallback на `uv tool list`. Без этого install мог вернуть 0,
+  # installed_identity() с fallback на `uv tool list`. Без этого install мог вернуть 0,
   # когда пакет поставлен вне PATH (типовой случай ~/.local/bin не в PATH) — уже
   # следующий check в цепочке check → install → check отдавал бы 10, расходясь с
   # «успехом», о котором только что отчитался install.
-  local pin="$1" installed remedy_text
+  local pin="$1" pin_n remedy_text installed_name installed_ver
+  pin_n="$(pin_name)"
   remedy_text="$(remedy_cmd_text "$pin")"
   hash -r 2>/dev/null || true
   if ! command -v ktalk >/dev/null 2>&1; then
-    if command -v uv >/dev/null 2>&1; then
-      installed="$(installed_version)" || installed=""
+    if command -v uv >/dev/null 2>&1 && installed_identity; then
+      installed_name="$II_NAME"; installed_ver="$II_VERSION"
     else
-      installed=""
+      installed_name=""; installed_ver=""
     fi
-    install_report missing_cli "$installed" "$pin" \
-      "Менеджер пакетов сообщает об установке${installed:+ (версия $installed)}, но команда ktalk не резолвится через PATH. Добавьте каталог инструментов uv (обычно ~/.local/bin) в PATH и повторите: $remedy_text" \
+    install_report missing_cli "$installed_name" "$installed_ver" "$pin_n" "$pin" \
+      "Менеджер пакетов сообщает об установке${installed_ver:+ (версия $installed_ver)}, но команда ktalk не резолвится через PATH. Добавьте каталог инструментов uv (обычно ~/.local/bin) в PATH и повторите: $remedy_text" \
       "$remedy_text"
     return "$E_MISSING_CLI"
   fi
-  installed="$(installed_version)" || installed=""
-  if [ -z "$installed" ] || ! version_eq "$installed" "$pin"; then
-    install_report outdated "$installed" "$pin" \
-      "Версия пакета (${installed:-неопределима}) не совпадает с требуемой версией $pin. Ремонт: $remedy_text" \
+  if installed_identity; then installed_name="$II_NAME"; installed_ver="$II_VERSION"
+  else installed_name=""; installed_ver=""; fi
+  if [ -z "$installed_name" ] || ! identity_eq "$installed_name" "$pin_n"; then
+    install_report wrong_package "$installed_name" "$installed_ver" "$pin_n" "$pin" \
+      "Установлен пакет ${installed_name:-неопределим} (${installed_ver:-?}), а требуется $pin_n $pin. Ремонт: $remedy_text" \
+      "$remedy_text"
+    return "$E_WRONG_PACKAGE"
+  fi
+  if [ -z "$installed_ver" ] || ! version_eq "$installed_ver" "$pin"; then
+    install_report outdated "$installed_name" "$installed_ver" "$pin_n" "$pin" \
+      "Версия пакета (${installed_ver:-неопределима}) не совпадает с требуемой версией $pin. Ремонт: $remedy_text" \
       "$remedy_text"
     return "$E_OUTDATED"
   fi
-  install_report ok "$installed" "$pin" "Пакет ktalk-mcp $installed установлен, версия совместима." "$remedy_text"
+  install_report ok "$installed_name" "$installed_ver" "$pin_n" "$pin" "Пакет $pin_n $installed_ver установлен, версия совместима." "$remedy_text"
   return "$E_OK"
 }
 
 cmd_install() {
-  local pin installed remedy_text
+  local pin pin_n installed_name installed_ver remedy_text
   # RI_RAN сброшен явно (DEV-007 дефект 2): все выходы из этой функции идут через
   # install_report, а не report, чтобы attempts/return_code/uv_output были в JSON на
   # любом исходе, включая ветки, где менеджер пакетов не запускается вовсе.
   RI_RAN=0; RI_RETRIED=0; RI_RC=0; RI_OUT=''; RI_FIRST_OUT=''
   if ! pin="$(pin_version)"; then
-    install_report error "" "" "Не прочитан compat.json плагина — переустановите плагин." ""
+    install_report error "" "" "" "" "Не прочитан compat.json плагина — переустановите плагин." ""
     return "$E_INTERNAL"
   fi
+  pin_n="$(pin_name)"
   remedy_text="$(remedy_cmd_text "$pin")"
   if ! command -v uv >/dev/null 2>&1; then
-    install_report missing_uv "" "$pin" "Не найден uv. Установите uv, затем: $remedy_text" "$remedy_text"
+    install_report missing_uv "" "" "$pin_n" "$pin" "Не найден uv. Установите uv, затем: $remedy_text" "$remedy_text"
     return "$E_MISSING_UV"
   fi
   if command -v ktalk >/dev/null 2>&1; then
-    installed="$(installed_version)" || installed=""
-    if [ -n "$installed" ] && version_eq "$installed" "$pin"; then
-      install_report ok "$installed" "$pin" "Пакет ktalk-mcp $installed уже установлен — установка не требуется." "$remedy_text"
+    if installed_identity; then installed_name="$II_NAME"; installed_ver="$II_VERSION"
+    else installed_name=""; installed_ver=""; fi
+    if [ -n "$installed_name" ] && identity_eq "$installed_name" "$pin_n" && version_eq "$installed_ver" "$pin"; then
+      install_report ok "$installed_name" "$installed_ver" "$pin_n" "$pin" "Пакет $pin_n $installed_ver уже установлен — установка не требуется." "$remedy_text"
       return "$E_OK"
     fi
     # Санкция на обновление нужна и когда установленная версия НОВЕЕ пина, не
     # только когда она старше (ADR-022 Д2/Д3) — под точным пином расхождение в
     # обе стороны требует мутации уже существующего состояния машины, а не
-    # только «движения вперёд».
+    # только «движения вперёд». Та же ветка накрывает и смену ИДЕНТИЧНОСТИ
+    # пакета (ADR-024 Д3): «команда уже существует и указывает на что-то
+    # другое» уже описывает и другой пакет, не только другую версию того же —
+    # новый ключ санкции не заводится.
     if ! sanction_granted update; then
-      install_report no_update_sanction "$installed" "$pin" \
-        "Версия ${installed:-неопределима} не совпадает с требуемой $pin. Ремонт требует отдельной санкции: bash ${BASH_SOURCE[0]} grant update" \
+      install_report no_update_sanction "$installed_name" "$installed_ver" "$pin_n" "$pin" \
+        "Установлен ${installed_name:-неопределимый пакет} ${installed_ver:-неопределимой версии}, а требуется $pin_n $pin. Ремонт требует отдельной санкции: bash ${BASH_SOURCE[0]} grant update" \
         "$remedy_text"
       return "$E_NO_UPDATE_SANCTION"
     fi
     remedy_cmd_array "$pin"
     if ! run_install "$remedy_text" "${REMEDY_CMD[@]}"; then
-      install_report install_failed "$installed" "$pin" \
+      if is_slot_collision "$RI_RC" "$RI_OUT"; then
+        report_slot_collision "$pin_n" "$pin" "$remedy_text"
+        return "$E_SLOT_COLLISION"
+      fi
+      install_report install_failed "$installed_name" "$installed_ver" "$pin_n" "$pin" \
         "Команда «${remedy_text}» завершилась с кодом $RI_RC. Состояние системы не изменено." \
         "$remedy_text"
       return "$E_INSTALL_FAILED"
@@ -380,14 +501,18 @@ cmd_install() {
     return $?
   fi
   if ! sanction_granted install; then
-    install_report no_sanction "" "$pin" \
+    install_report no_sanction "" "" "$pin_n" "$pin" \
       "Санкции на автоматическую установку нет. Установите сами: $remedy_text — или выдайте санкцию: bash ${BASH_SOURCE[0]} grant install" \
       "$remedy_text"
     return "$E_NO_SANCTION"
   fi
   remedy_cmd_array "$pin"
   if ! run_install "$remedy_text" "${REMEDY_CMD[@]}"; then
-    install_report install_failed "" "$pin" \
+    if is_slot_collision "$RI_RC" "$RI_OUT"; then
+      report_slot_collision "$pin_n" "$pin" "$remedy_text"
+      return "$E_SLOT_COLLISION"
+    fi
+    install_report install_failed "" "" "$pin_n" "$pin" \
       "Команда «${remedy_text}» завершилась с кодом $RI_RC. Состояние системы не изменено." \
       "$remedy_text"
     return "$E_INSTALL_FAILED"

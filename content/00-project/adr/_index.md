@@ -16,6 +16,9 @@ title: ADR
 - [ADR-023-plugin-requirements-relocation.md](ADR-023-plugin-requirements-relocation.md) —
   переезд четырёх требований плагина из дерева пакета, пять capability, судьба трёх пересечений
   с `cli-only-boundary`
+- [ADR-024-package-rename-transition.md](ADR-024-package-rename-transition.md) —
+  переход `ktalk-mcp` → `ktalk-cli`: идентичность пакета в `compat.json`, коллизия слота
+  `uv tool`, схема отката
 
 ## Правила
 

@@ -29,7 +29,7 @@ stub_uv_installs() { # stub_uv_installs <версия> [текст вывода]
   cat > "$TMP/bin/uv" <<EOF
 #!/usr/bin/env bash
 printf '%s\\n' "\$@" >> "$TMP/uv-args"
-printf '#!/usr/bin/env bash\\nprintf "ktalk-mcp $1\\\\n"\\n' > "$TMP/bin/ktalk"
+printf '#!/usr/bin/env bash\\nprintf "ktalk-cli $1\\\\n"\\n' > "$TMP/bin/ktalk"
 chmod +x "$TMP/bin/ktalk"
 echo "$msg"
 exit 0
@@ -44,11 +44,11 @@ stub_uv_installs_off_path() { # stub_uv_installs_off_path <версия> — DEV
   cat > "$TMP/bin/uv" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = "tool" ] && [ "\$2" = "list" ]; then
-  printf 'ktalk-mcp v$1\\n'
+  printf 'ktalk-cli v$1\\n'
   exit 0
 fi
 printf '%s\\n' "\$@" >> "$TMP/uv-args"
-printf '#!/usr/bin/env bash\\nprintf "ktalk-mcp $1\\\\n"\\n' > "$TMP/offpath/ktalk"
+printf '#!/usr/bin/env bash\\nprintf "ktalk-cli $1\\\\n"\\n' > "$TMP/offpath/ktalk"
 chmod +x "$TMP/offpath/ktalk"
 echo "Installed 1 executable: ktalk"
 exit 0
@@ -65,30 +65,30 @@ make_env
 "$SCRIPT" check >/dev/null 2>&1; check_eq 12 $? "check: нет uv → 12"
 
 # 3. версия ниже минимальной → 11
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.4.0"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.4.0 < 0.10.0 → 11"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.4.0"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.4.0 < 1.0.0 → 11"
 
 # 3a. 0.9.2 ниже 0.10.0 — сравнение посегментно-числовое, не лексикографическое
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.9.2"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.9.2 < 0.10.0 → 11"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.9.2"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.9.2 < 1.0.0 → 11"
 
 # 4. версия достаточна → 0
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 0.10.0 → 0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 1.0.0 → 0"
 
 # 5 (AC-7, ADR-022 Д3 — пин симметричен, не порог). Версия ВЫШЕ пина тоже
 # несовместима: «новее» перестаёт быть безусловным OK, как было при пороге.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 1.2.3"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 1.2.3 (новее пина 0.10.0) → 11, не молчаливый 0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.2.3"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 1.2.3 (новее пина 1.0.0) → 11, не молчаливый 0"
 
 # 6. --version не поддержан, версия берётся из uv tool list
 make_env
 printf '#!/usr/bin/env bash\nexit 2\n' > "$TMP/bin/ktalk"; chmod +x "$TMP/bin/ktalk"
-stub uv 0 "ktalk-mcp v0.10.0"
+stub uv 0 "ktalk-cli v1.0.0"
 "$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: fallback на uv tool list"
 
 # 7. --json печатает валидный JSON
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0"
 OUT="$("$SCRIPT" check --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "check --json: валидный JSON"
@@ -135,13 +135,13 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # 15. санкция есть, установка успешна → 0
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 0.10.0
+stub_uv_installs 1.0.0
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: с санкцией → 0"
 
 # 16. пакет уже свежий → 0 и uv не вызывался (идемпотентность)
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.10.0"
+stub ktalk 0 "ktalk-cli 1.0.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: уже установлен → 0"
 [ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: уже установлен — uv не вызывался"
@@ -149,7 +149,7 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # 17. устаревшая версия без санкции на обновление → 32
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.4.0"
+stub ktalk 0 "ktalk-cli 0.4.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 32 $? "install: устарел, нет allow_update → 32"
 [ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: устарел, нет allow_update — uv не вызывался"
@@ -187,16 +187,16 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # install/update по тексту команды, только по санкции, проверяемой раньше.
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.4.0"
-stub_uv_installs 0.10.0 "Installed 1 executable: ktalk"
+stub ktalk 0 "ktalk-cli 0.4.0"
+stub_uv_installs 1.0.0 "Installed 1 executable: ktalk"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: устарел, есть allow_update → 0"
 grep -qx 'install' "$TMP/uv-args"; check_eq 0 $? "install: ремонт зовёт uv tool install, не upgrade (AC-8)"
-grep -q '^ktalk-mcp==0\.10\.0$' "$TMP/uv-args"; check_eq 0 $? "install: аргумент называет пин явно — ktalk-mcp==0.10.0 (AC-8)"
+grep -q '^ktalk-cli==1\.0\.0$' "$TMP/uv-args"; check_eq 0 $? "install: аргумент называет пин явно — ktalk-cli==1.0.0 (AC-8)"
 
 # 23. install --json на успехе → валидный JSON
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 0.10.0
+stub_uv_installs 1.0.0
 OUT="$("$SCRIPT" install --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "install --json: валидный JSON на успехе"
@@ -258,7 +258,7 @@ printf '%s' "$OUT" | grep -q '"uv_output":"'; check_eq 0 $? "install --json: с�
 # install с явным пином (тест 22), «upgrade» этой веткой больше не вызывается.
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.4.0"
+stub ktalk 0 "ktalk-cli 0.4.0"
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >> "%s/uv-args"\necho "Already installed"\nexit 0\n' \
   "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 11 $? "install: ремонт успешен, версия не изменилась → 11 (постусловие не доверяет коду возврата)"
@@ -267,10 +267,10 @@ grep -qx 'install' "$TMP/uv-args"; check_eq 0 $? "install: ветка обнов
 # 29 (FR-31). успешная установка совместимой версии → 0 и статус ok
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 0.10.0
+stub_uv_installs 1.0.0
 OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install: индекс отдал 0.10.0 → 0"
 printf '%s' "$OUT" | grep -q '"status":"ok"'; check_eq 0 $? "install --json: статус ok при успехе"
-printf '%s' "$OUT" | grep -q '"installed_version":"0.10.0"'; check_eq 0 $? "install --json: installed_version при успехе"
+printf '%s' "$OUT" | grep -q '"installed_version":"1.0.0"'; check_eq 0 $? "install --json: installed_version при успехе"
 
 # 30 (DEV-007 дефект 1). uv tool list подтверждает версию, но ktalk не резолвится через
 # PATH (типовой случай ~/.local/bin не в PATH) — install не вправе молча сообщать успех;
@@ -311,14 +311,14 @@ check_json_telemetry "$OUT" 0 "install --json: нет uv — телеметри�
 
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.4.0"
+stub ktalk 0 "ktalk-cli 0.4.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 32 $? "install --json: устарел, нет allow_update → 32"
 check_json_telemetry "$OUT" 0 "install --json: нет allow_update — телеметрия честная"
 
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 0.10.0"
+stub ktalk 0 "ktalk-cli 1.0.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install --json: уже свежий → 0"
 check_json_telemetry "$OUT" 0 "install --json: уже свежий — телеметрия честная (uv не вызывался)"
@@ -343,7 +343,7 @@ check_json_telemetry "$OUT" 0 "install --json: уже свежий — теле�
 # санкцию (32), а не молчаливый 0, как было при пороге (см. старый тест 5).
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 1.2.3"
+stub ktalk 0 "ktalk-cli 1.2.3"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 32 $? "install: версия НОВЕЕ пина без allow_update → 32, не молчаливый 0"
 [ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: версия новее пина без санкции — uv не вызывался"
@@ -353,31 +353,31 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # не «безобидное движение вперёд», ADR-022 Д2).
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-mcp 1.2.3"
-stub_uv_installs 0.10.0 "Installed 1 executable: ktalk"
+stub ktalk 0 "ktalk-cli 1.2.3"
+stub_uv_installs 1.0.0 "Installed 1 executable: ktalk"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: версия новее пина, есть allow_update → откат на пин → 0"
-grep -q '^ktalk-mcp==0\.10\.0$' "$TMP/uv-args"; check_eq 0 $? "install: команда отката называет пин явно — ktalk-mcp==0.10.0"
+grep -q '^ktalk-cli==1\.0\.0$' "$TMP/uv-args"; check_eq 0 $? "install: команда отката называет пин явно — ktalk-cli==1.0.0"
 
 # 34 (AC-7/AC-8). check --json: расхождение «версия НИЖЕ пина» — команда
 # ремонта в JSON называет пин явно, не голое имя пакета без версии.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.4.0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.4.0"
 OUT="$("$SCRIPT" check --json 2>/dev/null)"
-printf '%s' "$OUT" | grep -q '"install_command":"[^"]*0\.10\.0[^"]*"'
-check_eq 0 $? "check --json (версия ниже пина): install_command называет пин 0.10.0"
-printf '%s' "$OUT" | grep -Eq '"install_command":"uv tool install ktalk-mcp"'
+printf '%s' "$OUT" | grep -q '"install_command":"[^"]*1\.0\.0[^"]*"'
+check_eq 0 $? "check --json (версия ниже пина): install_command называет пин 1.0.0"
+printf '%s' "$OUT" | grep -Eq '"install_command":"uv tool install ktalk-cli"'
 check_eq 1 $? "check --json (версия ниже пина): install_command — не голое имя пакета без версии"
 
 # 35 (AC-7/AC-8). check --json: расхождение «версия ВЫШЕ пина» — та же
 # гарантия, симметрично тесту 34.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 1.2.3"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.2.3"
 OUT="$("$SCRIPT" check --json 2>/dev/null)"
-printf '%s' "$OUT" | grep -q '"install_command":"[^"]*0\.10\.0[^"]*"'
-check_eq 0 $? "check --json (версия выше пина): install_command называет пин 0.10.0"
+printf '%s' "$OUT" | grep -q '"install_command":"[^"]*1\.0\.0[^"]*"'
+check_eq 0 $? "check --json (версия выше пина): install_command называет пин 1.0.0"
 
 # 36 (AC-7, класс «malformed/mistyped input»). ktalk печатает нераспознаваемую
 # версию (не semver, например билд-тег вместо релизной версии) — не крашится
 # и не признаёт версию совместимой молча.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp dev-build"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli dev-build"
 "$SCRIPT" check >/dev/null 2>&1; RC=$?
 [ "$RC" -ne 0 ]; check_eq 0 $? "check: нераспознаваемая версия строки — не молчаливый успех (код != 0)"
 check_eq 11 "$RC" "check: нераспознаваемая версия трактуется как несовпадение с пином → 11"
@@ -488,11 +488,11 @@ check_eq 1 "$DOC_HIT" "документация: таблица retired MCP → 
 # и теряет пре-релизный суффикс ДО того, как строка попадает в version_eq —
 # сравнение видит уже урезанное «0.10.0», не «0.10.0rc1»/«0.10.0-rc1», и
 # признаёт rc-сборку равной пину. Обе типографии из репро координатора.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0rc1"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0rc1"
 "$SCRIPT" check >/dev/null 2>&1
 check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
 
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0-rc1"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0-rc1"
 "$SCRIPT" check >/dev/null 2>&1
 check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0-rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
 
@@ -508,8 +508,8 @@ check_eq 11 $? "check (реальный путь): установлена пре
 make_env
 MIRROR43="$TMP/mirror-build-meta"; mkdir -p "$MIRROR43/scripts"
 cp "$SCRIPT" "$MIRROR43/scripts/ktalk-onboard.sh"
-printf '{\n  "ktalk_mcp_version": "0.10.0+build-1"\n}\n' > "$MIRROR43/compat.json"
-stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "0.10.0+build-1"\n}\n' > "$MIRROR43/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.10.0"
 "$MIRROR43/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
 check_eq 0 $? "check (реальный путь, пин с билд-метаданными 0.10.0+build-1): semver §10 — билд-метаданные игнорируются целиком, версии равны, код 0, не 11"
 
@@ -556,10 +556,12 @@ check_eq 1 $? "check-plugin-composition.sh: MCP-сервер контура ktal
 # Мутационное доказательство приложено в отчёте QA-author, не в составе
 # стаба: подъём пина в изолированной копии compat.json без правки README
 # переводит этот же ассерт в красное.
-PIN="$(grep -Eo '"ktalk_mcp_version"[[:space:]]*:[[:space:]]*"[^"]+"' "$ROOT/compat.json" | grep -Eo '[0-9][^"]*')"
-[ -n "$PIN" ]; check_eq 0 $? "compat.json: значение ktalk_mcp_version читается"
-grep -q "ktalk-mcp==$PIN" "$ROOT/README.md"
-check_eq 0 $? "README.md: команда установки называет ту же версию, что пин compat.json (сейчас $PIN) — регресс-guard на будущий подъём пина"
+PIN="$(grep -Eo '"package_version"[[:space:]]*:[[:space:]]*"[^"]+"' "$ROOT/compat.json" | grep -Eo '[0-9][^"]*')"
+[ -n "$PIN" ]; check_eq 0 $? "compat.json: значение package_version читается"
+PKG="$(grep -Eo '"package_name"[[:space:]]*:[[:space:]]*"[^"]+"' "$ROOT/compat.json" | sed -E 's/.*"([^"]+)"$/\1/')"
+[ -n "$PKG" ]; check_eq 0 $? "compat.json: значение package_name читается"
+grep -q "$PKG==$PIN" "$ROOT/README.md"
+check_eq 0 $? "README.md: команда установки называет тот же пакет и версию, что пин compat.json (сейчас $PKG==$PIN) — регресс-guard на будущий подъём/переименование пина"
 
 # 46 (находка 6 — промт-слой противоречит собственному _meta.md). _meta.md
 # навыка ktalk-registry объявляет MCP-поверхность контура ktalk снятой
@@ -574,6 +576,224 @@ check_eq 1 $? "SKILL.md: формулировка «primary call channel, not MC
 grep -qF '`ktalk_get_transcript` MCP tool' "$ROOT/agents/ktalk-processor.md"
 check_eq 1 $? "ktalk-processor.md: контракт описан как «тот же, что у MCP tool ktalk_get_transcript» — ретированный инструмент контура ktalk назван в настоящем времени, будто ещё существует"
 
+### QA-001 (эпик ktalk-plugin-foz, requirement 2026-08-31-package-rename-transition) ###
+# Стабы 47–56 покрывают 7 сценариев capability-спеки package-rename-transition
+# (нумерация AC — по порядку `#### Scenario:` в спеке; детали, класс каждого
+# ассерта и дев-хинты — content/30-requirements/2026-08-31-package-rename-transition/
+# at-design.md). AC-2 (пред-релизный гейт публикации) и AC-7 (санкция владельца на
+# публикацию) в этом файле не покрыты — процедурные шаги релизного пайплайна без
+# исполнимой поверхности в скрипте онбординга, закрыты чек-листом рансбука
+# DevOps (см. at-design.md, «Не покрыто исполнимым стабом»), тем же приёмом, что
+# AC-9 предыдущего требования cli-only-boundary.
+#
+# Красные ДО Dev: 48, 49, 50, 51, 52, 53, 55, 56 (новая схема compat.json,
+# installed_identity(), новые коды E_WRONG_PACKAGE=13/E_SLOT_COLLISION=34 ещё не
+# существуют — все обращения к новой схеме отказывают явным образом compat.json
+# без нужных ключей, E_INTERNAL=20, что и ловят ассерты ниже). Тест 47 и 54
+# сегодня уже проходят как регресс-guard (тот же приём, что тесты 36/45/46
+# предыдущего раунда) — мутационное доказательство в отчёте QA-author, не в
+# составе стаба.
+
+# 47 (AC-1 — «Prompt-layer text is unaffected by the rename», Scenario 1).
+# Механическая, не «на глаз», проверка: sha256-снимок ВСЕГО содержимого
+# skills/+agents/+commands/ (99 вызовов `ktalk` в 10 файлах, ADR-024 companion
+# §Boundaries), снятый до начала переименования пакета (2026-09-01). Снимок
+# сильнее диффа одного коммита — ловит дрейф за весь эпик, не только за
+# последний шаг. Зелёный сегодня (ничего ещё не менялось) — тот же приём, что
+# тест 45 уже применяет к README/compat.json; мутационное доказательство
+# (temp-правка одного символа в файле любого из трёх каталогов переводит
+# ассерт в красное) приложено в отчёте QA-author, не в составе стаба.
+EXPECTED_PROMPT_LAYER_SHA256="658d4111b1c317b28a905a449378349783bc95848267f557e3c815118b26213d"
+ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
+check_eq "$EXPECTED_PROMPT_LAYER_SHA256" "$ACTUAL_PROMPT_LAYER_SHA256" \
+  "AC-1: содержимое skills/+agents/+commands/ не изменилось со снимка — переименование пакета обязано остаться диффом из 6 названных файлов, не промт-слоя"
+
+# 48 (AC-3 — wrong_package отличим от outdated по коду возврата, ADR-024 Д1/Д2,
+# outcome#3 брифа). Зеркало с НОВОЙ схемой compat.json (package_name/
+# package_version) и стабом ktalk --version, печатающим ЧУЖОЕ имя дистрибутива
+# С ТЕМ ЖЕ номером версии, что и пин — ловит именно класс дефекта «сравнили
+# только цифры, имя проигнорировали»: если бы check сравнивал только версию,
+# это состояние прошло бы как ok (версии совпадают буквально).
+make_env
+MIRROR48="$TMP/mirror-wrong-package"; mkdir -p "$MIRROR48/scripts"
+cp "$SCRIPT" "$MIRROR48/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR48/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-mcp 1.0.0"
+OUT48="$("$MIRROR48/scripts/ktalk-onboard.sh" check --json 2>&1)"; RC48=$?
+check_eq 13 "$RC48" "AC-3: имя не совпадает с пином при СОВПАДАЮЩЕЙ версии → код 13 (wrong_package), не 0 и не 11 (outdated)"
+printf '%s' "$OUT48" | grep -q '"status":"wrong_package"'
+check_eq 0 $? "AC-3: --json называет статус именно wrong_package, не generic outdated/error"
+
+# 49 (AC-3, граница — имя совпадает с пином, версия отличается → outdated
+# по-прежнему 11 под НОВОЙ схемой полей). Регресс-guard: сравнение имени не
+# должно перехватывать путь, который раньше (единственное поле пина) уже
+# корректно вёл в outdated.
+make_env
+MIRROR49="$TMP/mirror-outdated-newschema"; mkdir -p "$MIRROR49/scripts"
+cp "$SCRIPT" "$MIRROR49/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR49/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.9.0"
+"$MIRROR49/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 11 $? "AC-3: имя совпадает с пином, версия ниже → 11 (outdated), не 13 — сравнение имени не должно перехватывать этот путь"
+
+# 50 (AC-3, класс «malformed/mistyped input» — нераспознанный первый токен
+# идентичности + диагностика registered_both, companion-статья «Edge cases»).
+# ktalk --version печатает искажённую строку идентичности (не имя из
+# известного списка) — резервный путь грепает uv tool list по ОБОИМ известным
+# именам; если совпали обе строки, это диагностический признак
+# registered_both в JSON, а не отдельный статус отказа установки (companion,
+# Data flow п.2). Итоговый статус ПРИ ЭТОМ обязан остаться явным (не 0/ok) —
+# нераспознанная идентичность сама по себе не подтверждает совместимость.
+make_env
+MIRROR50="$TMP/mirror-registered-both"; mkdir -p "$MIRROR50/scripts"
+cp "$SCRIPT" "$MIRROR50/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR50/compat.json"
+stub ktalk 0 "mystery-pkg 9.9.9"
+cat > "$TMP/bin/uv" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "tool" ] && [ "$2" = "list" ]; then
+  printf 'ktalk-mcp v0.10.0\nktalk-cli v1.0.0\n'
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$TMP/bin/uv"
+OUT50="$("$MIRROR50/scripts/ktalk-onboard.sh" check --json 2>&1)"
+printf '%s' "$OUT50" | grep -q '"registered_both":true'
+check_eq 0 $? "AC-3: оба известных имени видны в uv tool list при нераспознанной идентичности → диагностический признак registered_both в --json"
+printf '%s' "$OUT50" | grep -q '"status":"ok"'
+check_eq 1 $? "AC-3: нераспознанная идентичность + registered_both НЕ является молчаливым ok — статус обязан остаться явным отказом"
+
+# 51 (AC-4 — коллизия слота отличима от install_failed, никогда не решается
+# автоматическим --force, outcome#4 брифа). uv отказывает РЕАЛЬНЫМ кодом 2 и
+# текстом «Executable already exists», замеренным BA на синтетических
+# пакетах — скрипт обязан распознать этот конкретный отказ как slot_collision
+# (34), не общий install_failed (31), и НИКОГДА не повторить попытку с
+# --force, включая путь с санкцией на обновление (allow_update), не только
+# allow_install.
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+MIRROR51="$TMP/mirror-slot-collision"; mkdir -p "$MIRROR51/scripts"
+cp "$SCRIPT" "$MIRROR51/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR51/compat.json"
+cat > "$TMP/bin/uv" <<EOF
+#!/usr/bin/env bash
+printf '%s\\n' "\$@" >> "$TMP/uv-args"
+echo "error: Executable already exists: ktalk (use --force to overwrite)" >&2
+exit 2
+EOF
+chmod +x "$TMP/bin/uv"
+OUT51="$("$MIRROR51/scripts/ktalk-onboard.sh" install --json 2>&1)"; RC51=$?
+check_eq 34 "$RC51" "AC-4: uv отказывает кодом 2 + «Executable already exists» → скрипт репортит 34 (slot_collision), не 31 (install_failed)"
+printf '%s' "$OUT51" | grep -q '"status":"slot_collision"'
+check_eq 0 $? "AC-4: --json называет статус именно slot_collision"
+grep -qF -- '--force' "$TMP/uv-args"
+check_eq 1 $? "AC-4: скрипт НИ РАЗУ не передал --force в uv, включая путь с санкцией allow_update — принудительная замена остаётся ручным действием оператора"
+
+# 52 (AC-5 — перехваченный слот оставляет диагностируемый след, называя
+# КОНКРЕТНОЕ активное имя, не только факт несовпадения, outcome брифа
+# «оператор/скрипт видит, что реально исполняется»). Симулирует состояние
+# ПОСЛЕ ручного --force: ktalk теперь называет ДРУГОЙ пакет, не тот, что
+# пинует compat.json. cmd_check обязан назвать оба имени в сообщении/JSON —
+# не «несовместимо», а «активен ktalk-mcp, пин требует ktalk-cli».
+make_env
+MIRROR52="$TMP/mirror-overridden-takeover"; mkdir -p "$MIRROR52/scripts"
+cp "$SCRIPT" "$MIRROR52/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR52/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
+OUT52="$("$MIRROR52/scripts/ktalk-onboard.sh" check --json 2>&1)"
+printf '%s' "$OUT52" | grep -q 'ktalk-mcp'
+check_eq 0 $? "AC-5: диагностика называет РЕАЛЬНО активное имя (ktalk-mcp), не только факт несовпадения"
+printf '%s' "$OUT52" | grep -q 'ktalk-cli'
+check_eq 0 $? "AC-5: диагностика называет и целевой пин (ktalk-cli) рядом с активным именем — оператору видно обе стороны расхождения"
+# Дополнено координатором после мутационной проверки QA-002: два ассерта выше
+# грепают ИМЕНА в выводе и остаются зелёными при сломанном identity_eq — оба
+# имени попадают в JSON и когда статус ошибочно `ok`. Статус обязан проверяться
+# отдельно, иначе тест защищает форму сообщения, а не сам вердикт.
+"$MIRROR52/scripts/ktalk-onboard.sh" check --json >/dev/null 2>&1
+check_eq 13 $? "AC-5: вердикт именно wrong_package (13), а не ok — тест защищает решение, не только формулировку"
+
+# 53 (AC-6 — неверный порядок отката оставляет команду недиагностируемо
+# сломанной, outcome#5 брифа: «Проверь, что стаб ловит именно неверный
+# порядок, а не только конечное состояние»). Неверный порядок ADR-024 Д4 —
+# сначала `uv tool uninstall` активного пакета, ПОТОМ (или никогда) установка
+# целевого — воспроизводимо даёт код 127 у самого оператора (замер BA,
+# наблюдение 3). Симулирует именно ЭТОТ промежуточный момент: команда ktalk
+# уже не резолвится (бинарник стёрт), а uv tool list ПРОДОЛЖАЕТ числить снятый
+# пакет владельцем — cmd_check обязан вернуть missing_cli (10), а не
+# «совместим» на основании списка, который уже недостоверен (companion, Data
+# flow п.6).
+make_env
+MIRROR53="$TMP/mirror-wrong-rollback-order"; mkdir -p "$MIRROR53/scripts"
+cp "$SCRIPT" "$MIRROR53/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR53/compat.json"
+stub uv 0 ""  # command -v uv резолвится
+cat > "$TMP/bin/uv" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "tool" ] && [ "$2" = "list" ]; then
+  printf 'ktalk-mcp v0.10.0\n'
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$TMP/bin/uv"
+rm -f "$TMP/bin/ktalk"  # ktalk НЕ существует вовсе — бинарник уже стёрт uninstall'ом
+"$MIRROR53/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 10 $? "AC-6: неверный порядок отката (uninstall раньше reinstall) → command -v ktalk не резолвится → 10 (missing_cli), не «совместим» по устаревшему uv tool list"
+
+# 54 (AC-6/Д4 — верный порядок отката подтверждается ЖИВЫМ разрешением, не
+# устаревшим uv tool list). Симулирует состояние ПОСЛЕ шага 1 схемы отката
+# (принудительная переустановка целевой идентичности) и ДО шага 3 (снятие
+# зависшей регистрации) — ktalk уже реально называет целевой пакет, но
+# uv tool list ещё числит старый как «установленный» (шаг 3 не выполнен).
+# check обязан подтвердить ok по живому разрешению, а не откатиться к
+# устаревшему списку (companion, Data flow п.6 / Схема отката, шаг 2).
+make_env
+MIRROR54="$TMP/mirror-correct-rollback-order"; mkdir -p "$MIRROR54/scripts"
+cp "$SCRIPT" "$MIRROR54/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "ktalk-cli",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR54/compat.json"
+stub ktalk 0 "ktalk-cli 1.0.0"
+cat > "$TMP/bin/uv" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "tool" ] && [ "$2" = "list" ]; then
+  printf 'ktalk-mcp v0.10.0\n'
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$TMP/bin/uv"
+"$MIRROR54/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 0 $? "AC-6: верный порядок отката — живое разрешение (ktalk --version) подтверждает целевой пакет, даже пока uv tool list ещё числит старый — check не откатывается к списку"
+
+# 55 (outcome#2 брифа — идентичность параметризована, не литерал; ловит
+# именно ловушку SA, не «имя стало ktalk-cli»). Зеркало с ПРОИЗВОЛЬНЫМ, не
+# встречающимся в реальности именем пакета в compat.json — если ремонт
+# называет ИМЕННО это имя, pin_name() реально читает файл; если ремонт
+# продолжает называть «ktalk-mcp»/«ktalk-cli» текстом — тот же класс дефекта,
+# что уже ударил версию в 0.8.0 (companion, «Точка правки: литералы»).
+make_env
+MIRROR55="$TMP/mirror-arbitrary-pkg-name"; mkdir -p "$MIRROR55/scripts"
+cp "$SCRIPT" "$MIRROR55/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "zz-not-a-real-package-name",\n  "package_version": "42.0.0"\n}\n' > "$MIRROR55/compat.json"
+stub uv 0 ""
+rm -f "$TMP/bin/ktalk"
+OUT55="$("$MIRROR55/scripts/ktalk-onboard.sh" check --json 2>&1)"
+printf '%s' "$OUT55" | grep -q 'zz-not-a-real-package-name==42.0.0'
+check_eq 0 $? "outcome#2: команда ремонта называет пин произвольным именем из compat.json (pin_name параметризован), не хардкод-литералом ktalk-mcp/ktalk-cli"
+
+# 56 (AC-3, класс «malformed/mistyped input» — не отсутствие поля, а ИСКАЖЁННОЕ
+# значение: package_name присутствует, но пуст). Оба поля схемы обязательны
+# ОДНОВРЕМЕННО (companion, «Синтаксис пина») — пустая строка не то же самое,
+# что отсутствующий ключ (тесты 37/38 уже покрывают полное отсутствие); пустое
+# имя не должно молчаливо трактоваться как «подходит любому» или ронять скрипт
+# необработанной ошибкой — явный отказ 20, тот же fail-closed приём.
+make_env
+MIRROR56="$TMP/mirror-empty-package-name"; mkdir -p "$MIRROR56/scripts"
+cp "$SCRIPT" "$MIRROR56/scripts/ktalk-onboard.sh"
+printf '{\n  "package_name": "",\n  "package_version": "1.0.0"\n}\n' > "$MIRROR56/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0"
+"$MIRROR56/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 20 $? "AC-3: package_name — пустая строка (искажённое, не отсутствующее значение) → явный отказ 20, не молчаливое ok/совпадение с любым именем"
 
 printf '\nPASS: %s  FAIL: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
