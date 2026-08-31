@@ -76,9 +76,10 @@ make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.9.2"
 make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
 "$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 0.10.0 → 0"
 
-# 5. версия выше минимальной → 0
+# 5 (AC-7, ADR-022 Д3 — пин симметричен, не порог). Версия ВЫШЕ пина тоже
+# несовместима: «новее» перестаёт быть безусловным OK, как было при пороге.
 make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 1.2.3"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 1.2.3 → 0"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 1.2.3 (новее пина 0.10.0) → 11, не молчаливый 0"
 
 # 6. --version не поддержан, версия берётся из uv tool list
 make_env
@@ -181,14 +182,16 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 "$SCRIPT" install >/dev/null 2>&1; check_eq 30 $? "install: allow_update не даёт установки → 30"
 [ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: allow_update — uv не вызывался"
 
-# 22 (Ruling R4). устарел, обе санкции выданы → 0, вызван upgrade, не install
+# 22 (Ruling R4, пересмотрено ADR-022 Д2/AC-8). устарел, обе санкции выданы →
+# 0; ремонт зовёт ТУ ЖЕ команду install==<пин>, не upgrade — Д2 не разводит
+# install/update по тексту команды, только по санкции, проверяемой раньше.
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
 stub ktalk 0 "ktalk-mcp 0.4.0"
-stub_uv_installs 0.10.0 "Updated ktalk-mcp v0.4.0 -> v0.10.0"
+stub_uv_installs 0.10.0 "Installed 1 executable: ktalk"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: устарел, есть allow_update → 0"
-grep -q '^upgrade$' "$TMP/uv-args"; check_eq 0 $? "install: ветка обновления вызывает uv tool upgrade"
-grep -qx 'install' "$TMP/uv-args"; check_eq 1 $? "install: ветка обновления не вызывает uv tool install"
+grep -qx 'install' "$TMP/uv-args"; check_eq 0 $? "install: ремонт зовёт uv tool install, не upgrade (AC-8)"
+grep -q '^ktalk-mcp==0\.10\.0$' "$TMP/uv-args"; check_eq 0 $? "install: аргумент называет пин явно — ktalk-mcp==0.10.0 (AC-8)"
 
 # 23. install --json на успехе → валидный JSON
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
@@ -248,14 +251,18 @@ printf '%s' "$OUT" | grep -q '"installed_version":"0.4.0"'; check_eq 0 $? "insta
 printf '%s' "$OUT" | grep -q '"message":"'; check_eq 0 $? "install --json: несёт message"
 printf '%s' "$OUT" | grep -q '"uv_output":"'; check_eq 0 $? "install --json: сохранил uv_output"
 
-# 28 (FR-31). ветка обновления: «Nothing to upgrade», версия не изменилась → 11
+# 28 (FR-31, пересмотрено ADR-022 Д2/AC-7). Ремонт отчитался успехом («Already
+# installed»), но версия не изменилась (переустановка того же артефакта/кеш) →
+# постусловие обязано перечитать версию, а не доверять коду возврата менеджера
+# пакетов. Verb-специфичный ассерт «upgrade» снят: ремонт теперь всегда зовёт
+# install с явным пином (тест 22), «upgrade» этой веткой больше не вызывается.
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
 stub ktalk 0 "ktalk-mcp 0.4.0"
-printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >> "%s/uv-args"\necho "Nothing to upgrade"\nexit 0\n' \
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >> "%s/uv-args"\necho "Already installed"\nexit 0\n' \
   "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
-"$SCRIPT" install >/dev/null 2>&1; check_eq 11 $? "install: Nothing to upgrade, версия та же → 11"
-grep -q '^upgrade$' "$TMP/uv-args"; check_eq 0 $? "install: ветка обновления всё ещё вызывает upgrade"
+"$SCRIPT" install >/dev/null 2>&1; check_eq 11 $? "install: ремонт успешен, версия не изменилась → 11 (постусловие не доверяет коду возврата)"
+grep -qx 'install' "$TMP/uv-args"; check_eq 0 $? "install: ветка обновления по-прежнему зовёт uv tool install, не upgrade"
 
 # 29 (FR-31). успешная установка совместимой версии → 0 и статус ok
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
@@ -315,6 +322,258 @@ stub ktalk 0 "ktalk-mcp 0.10.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install --json: уже свежий → 0"
 check_json_telemetry "$OUT" 0 "install --json: уже свежий — телеметрия честная (uv не вызывался)"
+
+### QA-001 (эпик ktalk-plugin-4nk, requirement 2026-08-31-cli-only-boundary) ###
+# Стабы 32–41 покрывают 5 из 9 сценариев capability-спеки cli-only-boundary,
+# закреплённых за деревом плагина (AC-5 .. AC-8 из
+# openspec/specs/cli-only-boundary/spec.md; нумерация AC — по порядку
+# `#### Scenario:` в спеке, детали — content/30-requirements/2026-08-31-cli-only-boundary/at-design.md).
+# AC-1..AC-4 (extra fastmcp) и AC-9 (пред-релизный гейт) в этом дереве не
+# реализуются — см. at-design.md, раздел «Внешние сценарии».
+#
+# Красные ДО Dev: 5 (изменена), 22 (изменена), 28 (изменена), 32, 33, 34, 35,
+# 38, 40, 41. Тест 36 и 37 сегодня уже проходят как регресс-guard существующего
+# fail-closed поведения — доказательство, что ассерт способен упасть, дано
+# мутацией во внешнем отчёте QA-author (не в этом файле), см. at-design.md.
+# Тест 39 — намеренная незелёная заглушка на решение Dev (не автопройдёт, пока
+# Dev не заменит check_eq на реальную проверку выбранной нормализации).
+
+# 32 (AC-7, ADR-022 Д2/Д3 — санкция под пином, "masked failure" guard).
+# Установленная версия НОВЕЕ пина, allow_update не выдана → обязана требовать
+# санкцию (32), а не молчаливый 0, как было при пороге (см. старый тест 5).
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+stub ktalk 0 "ktalk-mcp 1.2.3"
+printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
+"$SCRIPT" install >/dev/null 2>&1; check_eq 32 $? "install: версия НОВЕЕ пина без allow_update → 32, не молчаливый 0"
+[ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: версия новее пина без санкции — uv не вызывался"
+
+# 33 (AC-7, симметрично тесту 22). Версия новее пина, allow_update выдана →
+# ремонт откатывает на точный пин той же командой install==<пин> (downgrade —
+# не «безобидное движение вперёд», ADR-022 Д2).
+make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
+printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
+stub ktalk 0 "ktalk-mcp 1.2.3"
+stub_uv_installs 0.10.0 "Installed 1 executable: ktalk"
+"$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: версия новее пина, есть allow_update → откат на пин → 0"
+grep -q '^ktalk-mcp==0\.10\.0$' "$TMP/uv-args"; check_eq 0 $? "install: команда отката называет пин явно — ktalk-mcp==0.10.0"
+
+# 34 (AC-7/AC-8). check --json: расхождение «версия НИЖЕ пина» — команда
+# ремонта в JSON называет пин явно, не голое имя пакета без версии.
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.4.0"
+OUT="$("$SCRIPT" check --json 2>/dev/null)"
+printf '%s' "$OUT" | grep -q '"install_command":"[^"]*0\.10\.0[^"]*"'
+check_eq 0 $? "check --json (версия ниже пина): install_command называет пин 0.10.0"
+printf '%s' "$OUT" | grep -Eq '"install_command":"uv tool install ktalk-mcp"'
+check_eq 1 $? "check --json (версия ниже пина): install_command — не голое имя пакета без версии"
+
+# 35 (AC-7/AC-8). check --json: расхождение «версия ВЫШЕ пина» — та же
+# гарантия, симметрично тесту 34.
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 1.2.3"
+OUT="$("$SCRIPT" check --json 2>/dev/null)"
+printf '%s' "$OUT" | grep -q '"install_command":"[^"]*0\.10\.0[^"]*"'
+check_eq 0 $? "check --json (версия выше пина): install_command называет пин 0.10.0"
+
+# 36 (AC-7, класс «malformed/mistyped input»). ktalk печатает нераспознаваемую
+# версию (не semver, например билд-тег вместо релизной версии) — не крашится
+# и не признаёт версию совместимой молча.
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp dev-build"
+"$SCRIPT" check >/dev/null 2>&1; RC=$?
+[ "$RC" -ne 0 ]; check_eq 0 $? "check: нераспознаваемая версия строки — не молчаливый успех (код != 0)"
+check_eq 11 "$RC" "check: нераспознаваемая версия трактуется как несовпадение с пином → 11"
+
+# 37 (AC-7, класс «masked failure»). compat.json без ключа пина вовсе — явный
+# отказ (20), а не тихий дефолт «любая версия подходит». Зеркало дерева, не
+# правка реального compat.json репозитория (DEV-002 владеет этим файлом).
+make_env
+MIRROR="$TMP/mirror-empty"; mkdir -p "$MIRROR/scripts"
+cp "$SCRIPT" "$MIRROR/scripts/ktalk-onboard.sh"
+printf '{}' > "$MIRROR/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
+"$MIRROR/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 20 $? "check: compat.json без ключа пина вовсе → явный отказ 20, не молчаливое ok"
+
+# 38 (AC-7, класс «masked failure»). compat.json несёт только СТАРЫЙ ключ
+# ktalk_mcp_min_version — после переименования на ktalk_mcp_version это то же
+# самое «пина нет»: обязан явно отказать (20), а не молчаливо принять старый
+# формат ключа. КРАСНЫЙ уже сегодня: текущий min_version() ещё читает старый
+# ключ и вернёт 0 (совместимо), не 20.
+make_env
+MIRROR="$TMP/mirror-oldkey"; mkdir -p "$MIRROR/scripts"
+cp "$SCRIPT" "$MIRROR/scripts/ktalk-onboard.sh"
+printf '{\n  "ktalk_mcp_min_version": "0.10.0"\n}\n' > "$MIRROR/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
+"$MIRROR/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 20 $? "check: только старый ключ ktalk_mcp_min_version после переименования → отказ 20, не молчаливое приятие старого формата"
+
+# 39 (граница, поведение НЕ специфицировано требованием — companion-статья,
+# раздел «Точка правки»: version_eq и pre-release/build-метаданные решает Dev).
+# Решение Dev (обоснование — комментарий над version_eq в ktalk-onboard.sh):
+# билд-метаданные (+xyz) игнорируются при сравнении (semver §10 — они не
+# участвуют в precedence), пре-релизные идентификаторы (-rc1…) — нет, версия
+# с пре-релизом не равна пину. Вызывается сама функция напрямую (source в
+# отдельном процессе), а не через check/install: installed_version() и так
+# вырезает суффикс регэкспом до сравнения — граница проверяема только на
+# уровне version_eq, не через CLI-обёртку.
+VEQ_BUILD="$(bash -c "source '$SCRIPT' >/dev/null 2>&1; version_eq '0.10.0+local' '0.10.0'; echo \$?" 2>/dev/null | tail -1)"
+check_eq 0 "$VEQ_BUILD" \
+  "version_eq: билд-метаданные игнорируются — 0.10.0+local равно пину 0.10.0 (semver §10)"
+
+VEQ_PRERELEASE="$(bash -c "source '$SCRIPT' >/dev/null 2>&1; version_eq '0.10.0-rc1' '0.10.0'; echo \$?" 2>/dev/null | tail -1)"
+check_eq 1 "$VEQ_PRERELEASE" \
+  "version_eq: пре-релизный идентификатор значим — 0.10.0-rc1 НЕ равно пину 0.10.0"
+
+# 40 (AC-5, ПЕРЕСМОТРЕНО после DEV-002 — поручение координатора, QA-001).
+# Прежние два ассерта прогоняли check-plugin-composition.sh на РЕАЛЬНОМ $ROOT и
+# требовали RC != 0 — верно, только пока .mcp.json существовал и декларировал
+# ktalk. Это были строительные леса «красный до Dev» (мутация лежала в самом
+# дереве, не была специально устроена), а не постоянный контракт: AC-5 спеки
+# («SHALL declare no MCP server») и companion-статья («Удаление .mcp.json»:
+# «Файл удаляется целиком») требуют, чтобы .mcp.json в дереве не было вовсе —
+# после DEV-002 так и есть, и прежнее «RC != 0 на живом дереве» стало
+# противоречить самому свойству, которое тест обязан защищать. Ретированы.
+#
+# Свойство «оба направления регресса ловятся» не потеряно — покрыто регресс-
+# тестом ниже на изолированной копии дерева (тот же приём, что тесты 37/38):
+# файл с ktalk в mcpServers → гейт падает и называет файл; файла нет → гейт
+# проходит. Проверено чтением реализации check_no_mcp_server()
+# (scripts/check-plugin-composition.sh) перед тем, как полагаться на неё здесь.
+#
+# Взамен ретированных ассертов — прямая проверка постоянного состояния живого
+# дерева: .mcp.json в корне отсутствует. Это наблюдаемое свойство AC-5, а не
+# деталь реализации гейта — регресс «файл вернули» обязан ловиться и на живом
+# дереве, не только на изолированной копии.
+[ ! -e "$ROOT/.mcp.json" ]; check_eq 0 $? "живое дерево: .mcp.json отсутствует (AC-5 — плагин не объявляет MCP-сервер)"
+MIRROR40="$TMP/mirror-mcp-regress"; cp -r "$ROOT" "$MIRROR40"; rm -rf "$MIRROR40/.git"
+cat > "$MIRROR40/.mcp.json" <<'JSON'
+{
+  "mcpServers": {
+    "ktalk": {
+      "type": "stdio",
+      "command": "ktalk-mcp"
+    }
+  }
+}
+JSON
+OUT40="$(bash "$MIRROR40/scripts/check-plugin-composition.sh" 2>&1)"; RC40=$?
+[ "$RC40" -ne 0 ]; check_eq 0 $? "check-plugin-composition.sh (регресс на копии дерева): .mcp.json с ktalk в mcpServers → гейт падает"
+printf '%s' "$OUT40" | grep -qi '\.mcp\.json'; check_eq 0 $? "check-plugin-composition.sh (регресс на копии дерева): сообщение называет .mcp.json"
+rm -f "$MIRROR40/.mcp.json"
+OUT40b="$(bash "$MIRROR40/scripts/check-plugin-composition.sh" 2>&1)"; RC40b=$?
+check_eq 0 "$RC40b" "check-plugin-composition.sh (регресс на копии дерева): .mcp.json отсутствует → гейт проходит"
+
+# 41 (AC-6, таблица «Retired MCP → CLI»). Оператор, вызывавший ретируемый
+# MCP-инструмент напрямую, обязан найти в документации CLI-эквивалент — все
+# три перечислены дословно. Проверка ведётся по CLI-командам (разрешённым к
+# написанию), не по буквальным retired-именам двух инструментов предпросмотра
+# встреч (они — запрещённые литералы дерева плагина, check-plugin-composition.sh).
+DOC_HIT=0
+for f in "$ROOT/README.md" "$ROOT/references/onboarding.md"; do
+  [ -f "$f" ] || continue
+  if grep -q 'ktalk create-meeting-preview' "$f" \
+     && grep -q 'ktalk cancel-meeting-preview' "$f" \
+     && grep -q 'ktalk get-summary-type' "$f"; then
+    DOC_HIT=1
+  fi
+done
+check_eq 1 "$DOC_HIT" "документация: таблица retired MCP → CLI перечисляет все три CLI-эквивалента в одном файле"
+
+### QA-001, раунд доработки — 5 дефектов code review, пропущенных прежней сьютой ###
+# Находки 1 и 5 обязаны идти через РЕАЛЬНЫЙ путь (cmd_check/cmd_install), не
+# прямым вызовом version_eq() — именно обход реального пути спрятал оба
+# дефекта в предыдущем раунде (тест 39 звал version_eq() напрямую).
+
+# 42 (находка 1 — пре-релизная гарантия отсутствует на реальном пути, AC-7).
+# installed_version() режет `ktalk --version` регуляркой [0-9]+\.[0-9]+\.[0-9]+
+# и теряет пре-релизный суффикс ДО того, как строка попадает в version_eq —
+# сравнение видит уже урезанное «0.10.0», не «0.10.0rc1»/«0.10.0-rc1», и
+# признаёт rc-сборку равной пину. Обе типографии из репро координатора.
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0rc1"
+"$SCRIPT" check >/dev/null 2>&1
+check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
+
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0-rc1"
+"$SCRIPT" check >/dev/null 2>&1
+check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0-rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
+
+# 43 (находка 5 — билд-метаданные с дефисом читаются как пре-релиз, AC-7).
+# version_eq(): `case "$1" in *-*)` смотрит на дефис ВО ВСЕЙ строке, а не в
+# части до "+" — билд-метаданные вида "+build-1" ошибочно принимаются за
+# пре-релиз "build-1" (semver §10 требует игнорировать билд-метаданные
+# целиком, независимо от её собственного содержимого). Тест 39 покрывал
+# только "+local" (без дефиса внутри) и не ловил этот случай. Реальный путь,
+# которым это достижимо, — значение ПИНА в compat.json: оно приходит в
+# version_eq сырым, без regex-фильтра (в отличие от installed_version()).
+# Зеркало дерева, как в тестах 37/38 — не правка реального compat.json.
+make_env
+MIRROR43="$TMP/mirror-build-meta"; mkdir -p "$MIRROR43/scripts"
+cp "$SCRIPT" "$MIRROR43/scripts/ktalk-onboard.sh"
+printf '{\n  "ktalk_mcp_version": "0.10.0+build-1"\n}\n' > "$MIRROR43/compat.json"
+stub uv 0 ""; stub ktalk 0 "ktalk-mcp 0.10.0"
+"$MIRROR43/scripts/ktalk-onboard.sh" check >/dev/null 2>&1
+check_eq 0 $? "check (реальный путь, пин с билд-метаданными 0.10.0+build-1): semver §10 — билд-метаданные игнорируются целиком, версии равны, код 0, не 11"
+
+# 44 (находка 2 — гейт состава проверяет меньше, чем требует AC-5). Спека:
+# «SHALL declare no MCP server for the ktalk circuit» — без оговорок про имя
+# файла и имя ключа. check_no_mcp_server() смотрит только на файл .mcp.json
+# и только на ключ, буквально совпадающий с "ktalk".
+
+# 44a: тот же сервер контура ktalk (команда ktalk-mcp) под ключом, не равным
+# буквально "ktalk", — гейт обязан заметить по команде/факту декларации, а
+# не только по точному имени ключа.
+MIRROR44A="$TMP/mirror-mcp-keyname"; cp -r "$ROOT" "$MIRROR44A"; rm -rf "$MIRROR44A/.git"
+cat > "$MIRROR44A/.mcp.json" <<'JSON'
+{
+  "mcpServers": {
+    "ktalk-mcp": {
+      "type": "stdio",
+      "command": "ktalk-mcp"
+    }
+  }
+}
+JSON
+bash "$MIRROR44A/scripts/check-plugin-composition.sh" >/dev/null 2>&1
+check_eq 1 $? "check-plugin-composition.sh: MCP-сервер контура ktalk под ключом \"ktalk-mcp\" (не буквально \"ktalk\") тоже обязан провалить гейт"
+
+# 44b: та же декларация лежит не в .mcp.json, а в другом файле состава
+# плагина (marketplace.json) — check_no_mcp_server() читает только .mcp.json.
+MIRROR44B="$TMP/mirror-mcp-otherfile"; cp -r "$ROOT" "$MIRROR44B"; rm -rf "$MIRROR44B/.git"
+python3 - "$MIRROR44B/.claude-plugin/marketplace.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["mcpServers"] = {"ktalk": {"type": "stdio", "command": "ktalk-mcp"}}
+json.dump(d, open(p, "w"), indent=2, ensure_ascii=False)
+PY
+bash "$MIRROR44B/scripts/check-plugin-composition.sh" >/dev/null 2>&1
+check_eq 1 $? "check-plugin-composition.sh: MCP-сервер контура ktalk, объявленный в marketplace.json (не .mcp.json), тоже обязан провалить гейт"
+
+# 45 (находка 3 — README рассинхронизируется с пином). Ранбук подъёма пина
+# правит только compat.json; README жёстко называет версию в команде
+# установки. Сегодня оба значения совпадают (0.10.0) — этот ассерт ЗЕЛЁНЫЙ на
+# неизменённом дереве, и это не пропуск дефекта: сам дефект — отсутствие
+# автоматической связи между файлами, а не расхождение значений сегодня.
+# Мутационное доказательство приложено в отчёте QA-author, не в составе
+# стаба: подъём пина в изолированной копии compat.json без правки README
+# переводит этот же ассерт в красное.
+PIN="$(grep -Eo '"ktalk_mcp_version"[[:space:]]*:[[:space:]]*"[^"]+"' "$ROOT/compat.json" | grep -Eo '[0-9][^"]*')"
+[ -n "$PIN" ]; check_eq 0 $? "compat.json: значение ktalk_mcp_version читается"
+grep -q "ktalk-mcp==$PIN" "$ROOT/README.md"
+check_eq 0 $? "README.md: команда установки называет ту же версию, что пин compat.json (сейчас $PIN) — регресс-guard на будущий подъём пина"
+
+# 46 (находка 6 — промт-слой противоречит собственному _meta.md). _meta.md
+# навыка ktalk-registry объявляет MCP-поверхность контура ktalk снятой
+# (".mcp.json removed"), но SKILL.md и agent-промт всё ещё описывают её как
+# живой канал для сравнения/альтернативу. Проверка целится в описание
+# СОБСТВЕННОГО MCP-сервера контура ktalk — упоминания стороннего инструмента
+# `qmd` (skills/ktalk-registry/SKILL.md:152, agents/ktalk-processor.md:107)
+# вне области этой находки и не затрагиваются.
+grep -q "not MCP" "$ROOT/skills/ktalk-registry/SKILL.md"
+check_eq 1 $? "SKILL.md: формулировка «primary call channel, not MCP» подразумевает MCP живой альтернативой — обязана уйти вместе со снятием MCP-поверхности (ADR-022 Д1, _meta.md)"
+
+grep -qF '`ktalk_get_transcript` MCP tool' "$ROOT/agents/ktalk-processor.md"
+check_eq 1 $? "ktalk-processor.md: контракт описан как «тот же, что у MCP tool ktalk_get_transcript» — ретированный инструмент контура ktalk назван в настоящем времени, будто ещё существует"
+
 
 printf '\nPASS: %s  FAIL: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

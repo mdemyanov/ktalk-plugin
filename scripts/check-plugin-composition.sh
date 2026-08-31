@@ -73,6 +73,62 @@ check "программный запуск sanction grant" \
 # Прежняя проверка «нет программного вызова *-confirm» снята сознательно: волна 6
 # сделала такой вызов штатным путём (ADR-016 отменяет ADR-005 §3 и ADR-015 §2).
 
+# ADR-022 Д1 / companion «Удаление .mcp.json»: плагин не объявляет MCP-сервер вовсе,
+# для контура ktalk — под любым именем ключа и в любом файле состава плагина (AC-5
+# спеки: «SHALL declare no MCP server for the ktalk circuit», без оговорок про имя
+# файла/ключа). Прежняя версия этой проверки смотрела только на файл .mcp.json и
+# только на ключ, буквально совпадающий с "ktalk" — находка code review DEV-002
+# round 2 (тесты 44a/44b): сервер под ключом "ktalk-mcp" или та же декларация в
+# marketplace.json проходили мимо гейта. Разбор — python3/json, не grep по сырому
+# тексту: ключ mcpServers может быть на верхнем уровне файла или внутри объекта
+# каждого плагина в списке "plugins" (marketplace.json).
+check_no_mcp_server() {
+    local hit
+    hit="$(python3 - <<'PYEOF'
+import json
+import sys
+
+CANDIDATES = [".mcp.json", ".claude-plugin/marketplace.json", ".claude-plugin/plugin.json"]
+
+
+def scan(rel):
+    try:
+        with open(rel, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    scopes = []
+    if isinstance(data, dict):
+        scopes.append(data)
+        plugins = data.get("plugins")
+        if isinstance(plugins, list):
+            scopes.extend(p for p in plugins if isinstance(p, dict))
+    findings = []
+    for scope in scopes:
+        servers = scope.get("mcpServers")
+        if not isinstance(servers, dict):
+            continue
+        for key, spec in servers.items():
+            command = spec.get("command", "") if isinstance(spec, dict) else ""
+            haystack = f"{key} {command}".lower()
+            if "ktalk" in haystack:
+                findings.append(f"{rel}: mcpServers.{key} (command={command!r})")
+    return findings
+
+
+for rel in CANDIDATES:
+    for line in scan(rel):
+        print(line)
+PYEOF
+)"
+    if [ -n "$hit" ]; then
+        echo "FAIL: декларация MCP-сервера контура ktalk найдена (ADR-022 Д1 — плагин обязан не объявлять MCP-поверхность):"
+        echo "$hit"
+        fail=1
+    fi
+}
+check_no_mcp_server
+
 # NFR-25 (ADR-018 решение 7): правка промт-слоя анализа (agents/, skills/ktalk-registry/)
 # без подъёма minor-версии в .claude-plugin/plugin.json — провал. AC NFR-25 требует
 # буквально «minor-версия плагина поднята», не просто «файл изменился» и не любой рост —

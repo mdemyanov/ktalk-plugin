@@ -11,6 +11,8 @@ title: ADR
   порог объёма и способ активации сверки открытых договорённостей
 - [ADR-021-prompt-language-boundary.md](ADR-021-prompt-language-boundary.md) —
   языковая граница промт-слоя и способ пометки русских литералов
+- [ADR-022-cli-only-boundary.md](ADR-022-cli-only-boundary.md) —
+  снятие MCP-поверхности плагина, точный пин версии пакета, судьба санкции `grant update`
 
 ## Правила
 

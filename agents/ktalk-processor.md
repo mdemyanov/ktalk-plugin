@@ -133,9 +133,9 @@ For `1-1`, always run the full algorithm — the interaction history matters.
 ktalk get-transcript {recording_id} --chunk 0 --json
 ```
 
-The response follows the same contract as the `ktalk_get_transcript` MCP tool (chunk=0 means
-auto): a small transcript (≤30000 characters) comes back as plain markdown; a large one as
-JSON with `result` / `chunk` / `total_chunks` / `has_more` / `total_characters`.
+The chunking contract (chunk=0 means auto): a small transcript (≤30000 characters) comes
+back as plain markdown; a large one as JSON with `result` / `chunk` / `total_chunks` /
+`has_more` / `total_characters`.
 
 For a large transcript — fetch the remaining chunks (`--chunk 2`, `--chunk 3`, … up to
 `total_chunks`), strip the duplicated heading from every chunk but the first, and assemble
