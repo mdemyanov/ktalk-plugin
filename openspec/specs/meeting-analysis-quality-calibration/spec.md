@@ -76,8 +76,14 @@ party named in speech — SHALL be resolved against the host project's declared 
 directory. A name that resolves unambiguously SHALL be written corrected, with no marker. A name
 that does not resolve — whether the lookup found no match or no directory is declared at all —
 SHALL always carry the single marker fixed by the protocol template, never silently left
-unmarked and never marked with an ad hoc form invented per occurrence. The same name SHALL be
-marked (or not) consistently everywhere it appears in one document.
+unmarked and never marked with an ad hoc form invented per occurrence. Each occurrence's marker
+follows from that occurrence's own resolution outcome, decided independently (§10 of
+`analysis-quality.md`). Document-wide consistency of one name's marking across its several
+occurrences — so that two occurrences of the same resolution outcome never disagree — is a
+desired property; no file of the prompt layer prescribes a check across occurrences today, so it
+is deferred rather than asserted here (tracked in `content/30-requirements/
+2026-08-19-analysis-quality-calibration.md` FR-42's fourth AC, pending its own prompt-layer
+calibration task).
 
 #### Scenario: A resolved, distorted name is written without a marker
 
@@ -97,10 +103,14 @@ marked (or not) consistently everywhere it appears in one document.
 - **THEN** every name whose form is in doubt against the transcript SHALL be marked — the
   degraded path SHALL NOT silently skip any case
 
-#### Scenario: One name is marked consistently across the document
+#### Scenario: A repeated name's marking is decided per occurrence, not by a document-wide pass
 
 - **WHEN** the same name occurs more than once in one protocol
-- **THEN** its marking SHALL NOT differ between occurrences without an explicit, stated reason
+- **THEN** each occurrence's marker SHALL follow from that occurrence's own resolution against
+  the profile directory (resolved → no marker; unresolved → the fixed marker); a check that
+  compares occurrences against each other for consistency is not prescribed by the prompt layer
+  and is out of scope for this scenario — it is a desired follow-up property, not yet
+  calibrated (see the Requirement note above)
 
 ### Requirement: A new row requires an articulated act of agreement, not silence
 
@@ -108,19 +118,28 @@ The reconciliation pass and the naming rules above SHALL NOT license inventing c
 from the transcript. A row in `Договорённости`/`Ключевые решения` is legitimate only when a
 dialogue turn carries an articulated act of agreement — explicit consent, a directive already
 carried out in the meeting, or an unambiguous acceptance — never the mere absence of an
-objection. A meeting with no such acts SHALL state plainly that none were found, not substitute
-a conditional wording as if it were a decision. Growth of `decisions_count`/`commitments_count`/
-`unclear_count` between two prompt revisions on the same recording is not, by itself, a defect:
-it is expected when the reconciliation pass above moves an already-spoken commitment from prose
-or from `Открытые вопросы` into the table. The optional `Ключевые тезисы` section for the
-`session` meeting type is part of the protocol template's contract, not an ad hoc addition of a
-particular run.
+objection. A meeting with no such acts SHALL NOT have a conditional wording substituted as if it
+were a decision — `decisions_count` SHALL be `0` in that case. A plain-language statement in the
+protocol text that no decisions were found is a desired property; no file of the prompt layer
+instructs adding such a statement, so it is deferred rather than asserted here (tracked in
+`content/30-requirements/2026-08-19-analysis-quality-calibration.md` FR-43's first AC, pending
+its own prompt-layer calibration task). Growth of `decisions_count`/`commitments_count`/
+`unclear_count` between two prompt revisions on the same recording is consistent with, and
+expected from, the reconciliation pass above moving an already-spoken commitment from prose or
+from `Открытые вопросы` into the table — but a formal rule that excludes such growth from the
+`ktalk-eval` evaluator's own defect criteria is a desired property; `eval-rubric.md`'s A/B
+verification method does not carry it today, so it is deferred rather than asserted here (same
+FR-43, third AC, pending calibration of the rubric rather than of the analysis prompt). The
+optional `Ключевые тезисы` section for the `session` meeting type is part of the protocol
+template's contract, not an ad hoc addition of a particular run.
 
-#### Scenario: No explicit decisions are stated plainly
+#### Scenario: Zero decisions are not backfilled from conditional wording
 
 - **WHEN** a meeting carries no "решили"/"договорились" moment
-- **THEN** `decisions_count` SHALL be `0` and the protocol text SHALL say plainly that no
-  decisions were found, without substituting a conditional wording as a decision
+- **THEN** `decisions_count` SHALL be `0` and no conditional wording SHALL be substituted as if
+  it were a decision; a plain-language statement that no decisions were found is a desired
+  follow-up property, not yet instructed by the protocol template — out of scope for this
+  scenario (see the Requirement note above)
 
 #### Scenario: Every table row traces to an articulated acceptance
 
@@ -128,12 +147,15 @@ particular run.
 - **THEN** it SHALL trace to a transcript turn carrying an articulated act of agreement; a row
   whose only basis is the absence of an objection SHALL NOT pass this check
 
-#### Scenario: A rising count between revisions is not itself a defect
+#### Scenario: A rising count between revisions is consistent with the reconciliation pass
 
 - **WHEN** `decisions_count`/`commitments_count`/`unclear_count` grows between two prompt
   revisions run on the same recording
-- **THEN** that growth alone SHALL NOT be classified as a defect; the defect determination
-  follows only from whether each new row traces to an articulated acceptance
+- **THEN** that growth by itself is consistent with the reconciliation pass (Requirement above)
+  moving an already-spoken commitment into the table, and is not on its face evidence of
+  invented content; a formal `eval-rubric.md` rule that excludes such growth from the
+  evaluator's own defect criteria is a desired follow-up property, not yet carried by the A/B
+  verification method — out of scope for this scenario (see the Requirement note above)
 
 #### Scenario: The session-type thesis section is a template contract, not an add-on
 
