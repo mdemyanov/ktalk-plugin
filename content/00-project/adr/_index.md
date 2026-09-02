@@ -19,6 +19,10 @@ title: ADR
 - [ADR-024-package-rename-transition.md](ADR-024-package-rename-transition.md) —
   переход `ktalk-mcp` → `ktalk-cli`: идентичность пакета в `compat.json`, коллизия слота
   `uv tool`, схема отката
+- [ADR-025-release-delivery-surface.md](ADR-025-release-delivery-surface.md) —
+  поставочная поверхность плагина и доставка релиза потребителю: форма релизного тега,
+  манифест маркетплейса, полнота документированного пути обновления, состав `agents/`,
+  подключение GO-критериев к `check.sh`
 - [ADR-026-orchestrator-processor-boundary.md](ADR-026-orchestrator-processor-boundary.md) —
   граница оркестратора и обработчика: кто вызывает `project-curator`, что обработчик
   возвращает отчётом, проверка личности транскрипта перед анализом (issue #5, #6)
