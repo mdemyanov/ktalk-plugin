@@ -8,6 +8,8 @@ title: Реализация
 ## Внутри раздела
 
 - [test-reports/](test-reports/_index.md) — отчёты QA-runner о полных прогонах тестового набора
+- [2026-09-03-release-delivery-tails.md](2026-09-03-release-delivery-tails.md) — хвосты релиза
+  1.9.0: доставка, точность состава, границы оркестратора (DEV-001, ktalk-plugin-ke5.12)
 
 ## Правила
 
