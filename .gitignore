@@ -4,3 +4,5 @@ __pycache__/
 .beads/
 .claude/settings.local.json
 .claude/agent-memory/
+.claude/worktrees/
+.nauta-authority-observations.jsonl
