@@ -1,6 +1,7 @@
 {
   "name": "ktalk-plugins",
   "owner": { "name": "mdemyanov" },
+  "description": "Marketplace одного плагина ktalk — обработка записей встреч Контур.Толк",
   "plugins": [
     {
       "name": "ktalk",
