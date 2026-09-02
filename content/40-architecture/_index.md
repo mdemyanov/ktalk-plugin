@@ -19,6 +19,9 @@ title: Архитектура
 - [2026-08-31-package-rename-transition.md](2026-08-31-package-rename-transition.md) —
   переход `ktalk-mcp` → `ktalk-cli`: схема идентичности пакета в `compat.json`, коллизия слота
   `uv tool`, схема отката, companion к ADR-024
+- [2026-09-03-orchestrator-processor-boundary.md](2026-09-03-orchestrator-processor-boundary.md) —
+  граница оркестратора и обработчика: делегирование `project-curator` через `ktalk-registry`,
+  проверка личности транскрипта перед анализом, companion к ADR-026
 
 ## Правила
 
