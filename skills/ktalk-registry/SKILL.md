@@ -230,6 +230,28 @@ itself, through `ktalk mark-*` — the skill does not interfere. The agent obtai
 layout the same way this skill does, with `ktalk config show --json`, not through the
 parameters of this prompt.
 
+### Step 5.5. Collecting affected projects and delegating to project-curator
+
+`ktalk-processor` never calls `project-curator` itself (ADR-026 Д1) — it only reports the
+projects a meeting touched. This step is where that report turns into action, once per run of
+this skill, not once per agent:
+
+1. As task notifications about each launched agent's completion arrive, read the
+   `Проекты затронуты: {ids}` / `Проекты затронуты: нет` line of that agent's final report and
+   union its ids into a running set for this run. Mark that agent completed.
+2. Once every agent launched by step 5 of **this** run is marked completed:
+   - the union is empty — do nothing further, `project-curator` is not called at all for this
+     run.
+   - the union is non-empty — call `project-curator` **exactly one time**, at most once per
+     run, never once per agent, with the combined list of ids and the `(date, save_location)`
+     pairs already known from step 4 of this same run.
+   - if that call does not resolve (`project-curator` is not installed in the host project) —
+     catch it and add to the run's summary: `project-curator не установлен — обновление
+     карточек пропущено`. This is a degradation, not a failure of the run.
+3. An agent that crashes or hangs before sending its final report never gets marked completed
+   — it drops out of this run's set, and `project-curator` is not called for this run even for
+   the ids other agents already reported (a known limitation, not a designed timeout).
+
 ### Step 6. Refresh the markdown mirror
 
 After the launches (and when the user chose `нет`), regenerate the markdown mirror of the
