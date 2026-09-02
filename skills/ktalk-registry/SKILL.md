@@ -16,7 +16,7 @@ description: >
 the host's vault — is Russian: reproduce the Russian literals in this file and in the
 referenced files verbatim, never translate or reword them (ADR-021).
 
-## Precondition: the ktalk-mcp package
+## Precondition: the CLI package
 
 Before the first `ktalk` command in a session, run:
 

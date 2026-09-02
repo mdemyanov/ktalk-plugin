@@ -232,7 +232,7 @@ division (source: the ADR-018 spec, §3 `Разграничение верифи
 
 The term "automatic check" used in the requirement's AC does not mean an existing automated
 test: there is no automated test of prompt behaviour in this plugin, and by the ADR-012
-boundary there cannot be one (the prompt layer is not covered by the `ktalk-mcp` package's
+boundary there cannot be one (the prompt layer is not covered by the CLI package's
 pytest suite). The verification method for each item is given by the table above: either
 reading the protocol text (by a human or by an LLM evaluator), or comparing two A/B runs;
 neither is a CI test in the usual sense.

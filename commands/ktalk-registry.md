@@ -33,7 +33,7 @@ Load and run the workflow from the `ktalk-registry` skill
 (`skills/ktalk-registry/SKILL.md`).
 
 The host project's directory layout lives neither in this command nor in the host's
-`CLAUDE.md`: the discovery config `.ktalk.toml` (if declared) is read by the `ktalk-mcp`
+`CLAUDE.md`: the discovery config `.ktalk.toml` (if declared) is read by the CLI
 package through `ktalk config show --json` (workflow step 0) — go there, not to any textual
 description of the layout.
 

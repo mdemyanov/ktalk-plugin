@@ -8,7 +8,7 @@
 
 ### Location
 
-The path is resolved by the `ktalk-mcp` package in this priority order: the `--db PATH` flag >
+The path is resolved by the CLI package in this priority order: the `--db PATH` flag >
 the `KTALK_REGISTRY_DB` environment variable > the path from the host project's `.ktalk.toml`
 (`registry.db_path`, `ktalk config show --json`) > a machine default. This skill neither holds
 nor assumes any particular path.

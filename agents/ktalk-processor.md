@@ -26,7 +26,7 @@ the host's vault — is Russian: the protocol, the profile rows and the final re
 Russian, and the Russian literals in this file (status markers, section names, transcript
 cues, date formats) are reproduced verbatim, never translated or reworded (ADR-021).
 
-## Precondition: the ktalk-mcp package
+## Precondition: the CLI package
 
 Before the first `ktalk` command in a session, run:
 

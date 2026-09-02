@@ -19,7 +19,7 @@ the host's vault — is Russian: the report, the tracker rows and the quoted evi
 Russian, and the Russian literals in this file are reproduced verbatim, never translated or
 reworded (ADR-021).
 
-## Precondition: the ktalk-mcp package
+## Precondition: the CLI package
 
 Before the first `ktalk` command in a session, run:
 
