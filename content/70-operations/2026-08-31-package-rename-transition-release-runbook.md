@@ -194,6 +194,24 @@ PY
      JSON `{"info": {"yanked": true, "yanked_reason": "critical bug in publish sequence"}}` →
      `BLOCK: ktalk-cli==9.9.9-fake is yanked (critical bug in publish sequence)`, код `1`.
 
+   **Исполнено 2026-09-02 (публикация выполнена по санкции владельца).** Оба пакета в индексе,
+   `pypi_gate` вернул `0` по `ktalk-cli 1.0.0` и по `ktalk-mcp 0.11.0`. Два замера, которые
+   меняют текст самого рунбука на будущее:
+
+   - **`uv publish` не читает `~/.pypirc`** (в его `--help` слова `pypirc` нет), поэтому
+     требует токен строкой или в переменной окружения. `twine` читает — и публикация прошла
+     через `uvx --from twine twine upload --non-interactive`, чтобы секрет не разглашался.
+     Установленный в системе `twine` 6.2.0 при этом отвергает артефакты hatchling
+     (`InvalidDistribution: '2.5' is not a valid metadata version` — старый `packaging` 25.0);
+     свежий twine через `uvx` даёт `PASSED`. Это дефект проверяющего, не артефакта.
+   - **Зелёный `pypi_gate` не означает «уже ставится».** Сразу после загрузки указателя
+     JSON API отвечал `OK: ktalk-mcp==0.11.0 published and not yanked` (код `0`), а
+     `pip install ktalk-mcp==0.11.0` в ту же секунду — `No matching distribution`
+     (простой индекс ещё перечислял версии по `0.10.0`). Повтор десятками секунд позже
+     прошёл с первого раза. Гейт по JSON API — условие необходимое, но не достаточное:
+     если следующий шаг ставит пакет, закладывай retry-цикл, а достаточным доказательством
+     считай установку в чистый venv из живого индекса.
+
 2. **Публикация финальной версии-указателя `ktalk-mcp` 0.11.0 в PyPI** — тот же принцип шага 1
    (репозиторий пакета, отдельная санкция, не выполняется этой ролью). Контракт версии
    (Requirement «The retired `ktalk-mcp` package announces its retirement loudly, not
