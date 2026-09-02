@@ -232,7 +232,7 @@ parameters of this prompt.
 
 ### Step 5.5. Collecting affected projects and delegating to project-curator
 
-`ktalk-processor` never calls `project-curator` itself (ADR-026 Д1) — it only reports the
+`ktalk-processor` never calls `project-curator` itself (ADR-026 D1) — it only reports the
 projects a meeting touched. This step is where that report turns into action, once per run of
 this skill, not once per agent:
 
@@ -246,8 +246,7 @@ this skill, not once per agent:
      run, never once per agent, with the combined list of ids and the `(date, save_location)`
      pairs already known from step 4 of this same run.
    - if that call does not resolve (`project-curator` is not installed in the host project) —
-     catch it and add to the run's summary: `project-curator не установлен — обновление
-     карточек пропущено`. This is a degradation, not a failure of the run.
+     catch it and add to the run's summary: `project-curator не установлен — обновление карточек пропущено`. This is a degradation, not a failure of the run.
 3. An agent that crashes or hangs before sending its final report never gets marked completed
    — it drops out of this run's set, and `project-curator` is not called for this run even for
    the ids other agents already reported (a known limitation, not a designed timeout).

@@ -107,7 +107,7 @@ The confirmation request format:
 ### Hard-stop report (transcript identity unresolved after the retry)
 
 When step 2b's retry still does not confirm participants, the meeting was NOT processed — the
-report does not carry the "✅ Встреча обработана" header, and nothing about the transcript,
+report does not carry the `✅ Встреча обработана` header, and nothing about the transcript,
 protocol, or vault is claimed as done:
 
 ```

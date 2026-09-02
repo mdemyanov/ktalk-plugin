@@ -157,15 +157,13 @@ anything, extract the speaker names mentioned in it and compare them against
   `{recording_id} --chunk 0 --json` exactly one time — one retry, never a loop — and compare
   the new result by the same rule.
   - The retry matches — participants are confirmed. Add one line to the final report's
-    «Требует внимания» section: `get-transcript вернул чужие данные при первой попытке,
-    устранено повтором` — a transient race that self-resolved still leaves a visible trace, not
+    `Требует внимания` section: `get-transcript вернул чужие данные при первой попытке, устранено повтором` — a transient race that self-resolved still leaves a visible trace, not
     silence.
   - The retry still mismatches — **hard stop**. Do not build, save, or archive anything from
     this unconfirmed content: skip the remaining chunks, skip step 2.5 and everything after it,
     and call `ktalk mark-partial {recording_id}` — no attachment flags, since nothing here was
     confirmed to attach. The final report names the requested `recording_id` and the
-    participants actually found in the fetched content, and does not carry the "✅ Встреча
-    обработана" header — the meeting was not processed.
+    participants actually found in the fetched content, and does not carry the `✅ Встреча обработана` header — the meeting was not processed.
 
 Only once participants are confirmed (on the first fetch or after the one retry) — not
 before — save the result following the `registry.routing.transcript_archive` template from
