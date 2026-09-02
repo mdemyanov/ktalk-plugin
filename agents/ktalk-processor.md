@@ -44,9 +44,9 @@ The host project's directory layout is not hard-coded in this prompt — it is r
 `ktalk config show --json` (step 0b). Act on the values it returns for THIS project, not on
 the examples in this file.
 
-Analysis-quality rules: `references/two-pass-analysis.md`
-Protocol template: `references/protocol-template.md`
-Hybrid update and final report: `references/vault-update-and-report.md`
+Analysis-quality rules: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/two-pass-analysis.md`
+Protocol template: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/protocol-template.md`
+Hybrid update and final report: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/vault-update-and-report.md`
 
 ---
 
@@ -147,7 +147,7 @@ substitute the `{YYYY}` / `{date}` / `{type}` / `{title}` placeholders yourself;
 the `transcript_archive` key is not declared, record the path as an explicit note in the final
 report and do not write the file to a guessed path.
 
-The saved file's format and frontmatter: `references/two-pass-analysis.md`.
+The saved file's format and frontmatter: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/two-pass-analysis.md`.
 
 **IMPORTANT:** analyse the transcript FROM MEMORY (the data of step 2), NOT from the saved
 file — it may be too large for the Read tool.
@@ -185,7 +185,7 @@ d) Related decisions and ADRs (if `qmd` is available):
 ### 4. Two-pass analysis
 
 The full algorithm (small and chunked transcripts, the structured extraction checklist) is in
-`references/two-pass-analysis.md`. Follow the quality rules there as well.
+`${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/two-pass-analysis.md`. Follow the quality rules there as well.
 
 ### 4.5. Final reconciliation of the prose against the `Договорённости` table
 
@@ -219,7 +219,7 @@ from the transcript (step 3); it checks the draft against itself.
 
 Use `save_location` from the parameters. If it is `archive_only` → do not create a protocol,
 only the transcript. Otherwise use the template and the fixed protocol sections:
-`references/protocol-template.md`. Links to participant profiles in the protocol follow
+`${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/protocol-template.md`. Links to participant profiles in the protocol follow
 `registry.directories.people` from step 0b; if the key is not declared, leave the participant
 as plain text with no wiki-link rather than guessing the directory.
 
@@ -308,11 +308,11 @@ and the row's status is not changed.
 ### 6. Hybrid update and the registry
 
 Automatic and confirmation-requiring updates, and the `ktalk mark-done` / `mark-partial`
-commands: `references/vault-update-and-report.md`.
+commands: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/vault-update-and-report.md`.
 
 ### 7. Final report
 
-The format: `references/vault-update-and-report.md`.
+The format: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/vault-update-and-report.md`.
 
 ## Final step — delegating to project-curator
 

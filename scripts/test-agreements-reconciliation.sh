@@ -3,7 +3,7 @@
 # `ktalk-processor` (сверка «📝 Открытые договорённости», ktalk-plugin-o9l, QA-001).
 #
 # Предмет — ТЕКСТ промт-слоя (agents/ktalk-processor.md,
-# agents/references/vault-update-and-report.md), не поведение модели: здесь нет
+# references/ktalk-processor/vault-update-and-report.md), не поведение модели: здесь нет
 # прикладного кода (ADR-012), поэтому что можно проверить скриптом — это наличие и
 # форму инструкций, а не факт, что модель им следует. Поведенческие сценарии (молчание
 # не акцепт, отбор области, разбор таблицы) закрывают фикстуры из
@@ -20,7 +20,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROCESSOR="$ROOT/agents/ktalk-processor.md"
-VAULT_REF="$ROOT/agents/references/vault-update-and-report.md"
+VAULT_REF="$ROOT/references/ktalk-processor/vault-update-and-report.md"
 
 [[ -f "$PROCESSOR" ]] || { echo "ERROR: $PROCESSOR not found" >&2; exit 2; }
 [[ -f "$VAULT_REF" ]] || { echo "ERROR: $VAULT_REF not found" >&2; exit 2; }
@@ -159,7 +159,7 @@ assert_contains_re "AC-10" \
 assert_contains "AC-10" "счётчик «вне области» упомянут в шаге 5.5" "$STEP55_FILE" "вне области"
 
 echo ""
-echo "== Группа B: agents/references/vault-update-and-report.md =="
+echo "== Группа B: references/ktalk-processor/vault-update-and-report.md =="
 
 # AC-3 (доп.) — «Автоматически» → «Профили участников»: сверка и добавление — два Edit.
 assert_contains_re "AC-3" \

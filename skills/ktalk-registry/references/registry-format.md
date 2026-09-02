@@ -150,4 +150,4 @@ unclear_count: {N}
 ```
 
 The protocol's fixed sections (the order never changes) — see `analysis-quality.md` and
-`agents/references/protocol-template.md`.
+`references/ktalk-processor/protocol-template.md`.
