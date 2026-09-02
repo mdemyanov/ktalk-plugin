@@ -16,6 +16,12 @@
 # поставку плагина не входит, а его записи цитируют пути и паттерны, которые
 # проверка ищет. `scripts/` поставляется пользователю
 # и обязан проверяться наравне с промтами (волна 4, DEV-005).
+# В рабочей копии-worktree `.git` — не каталог, а файл-указатель с абсолютным
+# путём (`gitdir: <путь>/.git/worktrees/<id>`); `--exclude-dir=.git` матчит
+# только каталоги, поэтому добавлен файловый `--exclude=.git` отдельно.
+# `.nauta-authority-observations.jsonl` — untracked запись сессии рабочей
+# машины (hook nauta), не входит в состав плагина; исключена по той же логике
+# (ADR-025 companion, «Находка при верификации»).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -32,6 +38,8 @@ check() {
         --exclude-dir=.beads \
         --exclude-dir=agent-memory \
         --exclude=check-plugin-composition.sh \
+        --exclude=.git \
+        --exclude=.nauta-authority-observations.jsonl \
         .); then
         echo "FAIL: $label"
         echo "$hits"
