@@ -145,10 +145,18 @@ promptLayerSizeBudget:
 # изолированной копии без .git и без собственной строки в её .nauta-gates.yaml — иначе
 # подключение здесь ниже дало бы бесконечную рекурсию (check.sh запускает сьюту, та снова
 # запускает check.sh). Подробности и доказательство завершимости — отчёт задачи DEV-002.
+#
+# check-mcp-channel-language.sh (DEV-002, ktalk-plugin-igu, backlog ktalk-plugin-ddq) — fast:,
+# не full:: тот же класс проверки, что два соседа выше — статический скан текста промт-слоя,
+# без подпроцессов и сети, замерено 0,12 с на живом дереве (17 файлов), тот же порядок, что у
+# check-prompt-language.sh. Заменяет собой не гейт целиком, а СПОСОБ, которым test-onboard.sh
+# (тест 46) защищал ту же строку Requirement: два строкоспецифичных grep → обобщённый
+# default-deny скан (см. заголовок скрипта и отчёт задачи DEV-102).
 projectGates:
   fast:
     - scripts/check-plugin-composition.sh
     - scripts/check-prompt-language.sh
+    - scripts/check-mcp-channel-language.sh
   full:
     - scripts/test-onboard.sh
     - scripts/test-release-delivery-tails.sh
