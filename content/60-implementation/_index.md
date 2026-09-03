@@ -13,6 +13,12 @@ title: Реализация
 - [2026-09-03-projectgates-full-recursion-guard.md](2026-09-03-projectgates-full-recursion-guard.md)
   — подключение `test-release-delivery-tails.sh` к `projectGates.full` без рекурсии (DEV-002,
   ktalk-plugin-ke5.14)
+- [2026-09-03-quality-calibration-drift-closure.md](2026-09-03-quality-calibration-drift-closure.md)
+  — закрытие трёх пунктов дрейфа REV-002 в промт-слое калибровки анализа (DEV-101,
+  ktalk-plugin-109)
+- [2026-09-03-gate-perimeter-coverage-gap.md](2026-09-03-gate-perimeter-coverage-gap.md) —
+  периметр AC-1/NFR-25 расширен на `references/` после переезда ADR-025 Д5, minor-версия
+  1.10.0 → 1.11.0 (DEV-103, ktalk-plugin-igu)
 
 ## Правила
 

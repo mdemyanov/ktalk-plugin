@@ -1000,6 +1000,316 @@ if [[ "$MODE" == "--delivery-composition-only" ]]; then
   _finish
 fi
 
+# ---------------------------------------------------------------------------
+# link-integrity-delivery (ADR-083 Д1-Д3/Д7, спутник §2/§3/§4.1) — субъект проверки ссылочной
+# целостности онбординг-текста ЭТОГО дерева обязан быть СОСТАВОМ ПОСТАВКИ (`git ls-files`
+# минус `excluded:`), а не диском дерева разработки, где ADR-014/C9 уже проверяет то же самое
+# и молчит на ссылках в `content/` — область там другая (Д1/Д2 ADR-083). Место вызова — сразу
+# после delivery-composition и до secret-scan-tree (§3 спутника): тот же предмет («сначала
+# читаемость носителя, потом суждение о дереве»), тот же порядок.
+#
+# Реализация — бэш-функция плюс ОДНОФАЙЛОВЫЙ embedded-python (heredoc, не отдельный
+# scripts/*.py) намеренно, а не через run_gate_if_declared: контрактный тестовый стенд QA-081
+# (tests/test_link_integrity_delivery_gate.py, докстрока) копирует в дерево-фикстуру РОВНО
+# `scripts/check.sh` (плюс bin/deliver.sh) — ни `scripts/_validate_common.py`, ни
+# `scripts/validate-content.py` там нет. Гейт, объявленный через run_gate_if_declared,
+# получил бы там ERROR-MISSING-AT-ORIGIN на КАЖДОМ прогоне вместо содержательной проверки —
+# как и delivery-composition/secret-scan-tree, этот гейт — часть самого раннера, а не
+# отдельно поставляемый файл. Питон внутри heredoc — ради регулярных выражений и множеств
+# (резолвер/маска/таблица конструкций), которые бэш/awk воспроизвёл бы менее надёжно; такой
+# же алгоритм и та же таблица `_LINK_PATTERNS`, что у дискового резолвера C9
+# (scripts/validate-content.py::_resolve_link_target) и у второго прохода против канала
+# (scripts/check-link-integrity-channel.py) — физическая копия неизбежна по той же причине
+# самодостаточности; менять форму ссылки — значит менять все три места разом.
+LINK_INTEGRITY_SECTION="link-integrity-delivery"
+
+run_link_integrity_delivery_gate() {
+  # §2.3 (тот же приём, что ORIGIN уже применяет к delivery-composition, строки 244+): у
+  # потребителя сторож не зовётся ВООБЩЕ — ни строки вывода, exit-код не меняется.
+  [[ "$ORIGIN" -eq 1 ]] || return 0
+
+  # uv, не голый python3 (единственная внешняя зависимость check.sh — uv-guard в шапке
+  # файла; голый python3 её обошёл бы молча на среде, где интерпретатор ставит только uv).
+  # PYTHONUNBUFFERED — иначе stdout буферизуется блоками при перенаправлении в пайп и строки
+  # ERROR (stderr, небуферизован) обгоняют заголовок "▶ …" (stdout) в объединённом выводе —
+  # секция читается тестами по ПЕРВОЙ строке с литералом, порядок должен быть детерминирован.
+  local rc=0
+  PYTHONUNBUFFERED=1 uv run - "$REPO_ROOT" "$DELIVERY_CARRIER_NAME" "$LINK_INTEGRITY_SECTION" <<'PYEOF' || rc=$?
+import posixpath
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+SECTION = sys.argv[3] if len(sys.argv) > 3 else "link-integrity-delivery"
+REPO_ROOT = Path(sys.argv[1]).resolve()
+CARRIER_NAME = sys.argv[2]
+CARRIER = REPO_ROOT / CARRIER_NAME
+
+PLACEHOLDER_RE = re.compile(r"\{\{[A-Z_]+\}\}")
+
+
+def has_placeholder(path: Path) -> bool:
+    """Копия scripts/_validate_common.py::has_placeholder (ADR-014 Д2/ADR-007 Д5) —
+    физическая копия неизбежна: этот процесс не смеет импортировать соседние scripts/*.py
+    (см. докстроку над функцией run_link_integrity_delivery_gate)."""
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        return False
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return False
+    return bool(PLACEHOLDER_RE.search(parts[1]))
+
+
+_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})(.*)$')
+_INLINE_CODE_RE = re.compile(r'(`+)([^\n]+?)\1')
+
+
+def mask_code(text: str) -> str:
+    """Копия scripts/_validate_common.py::_mask_code."""
+    out = []
+    fence_char = None
+    fence_len = 0
+    for line in text.split("\n"):
+        m = _FENCE_RE.match(line)
+        if fence_char is None:
+            if m:
+                fence_char, fence_len = m.group(1)[0], len(m.group(1))
+                out.append(" " * len(line))
+            else:
+                out.append(line)
+            continue
+        if m and m.group(1)[0] == fence_char and len(m.group(1)) >= fence_len \
+                and not m.group(2).strip():
+            fence_char, fence_len = None, 0
+        out.append(" " * len(line))
+    return _INLINE_CODE_RE.sub(lambda m: " " * len(m.group(0)), "\n".join(out))
+
+
+# Та же таблица, что ADR-014 Д1 / scripts/validate-content.py::_LINK_PATTERNS, кроме
+# snippet_id — форма резолвится относительно content/.gramax/snippets/, которого в составе
+# поставки нет (§2 ADR-083-spec: вне области, помечается строкой, не молчанием).
+_LINK_PATTERNS = [
+    ("path", re.compile(r'!?\[[^\]\n]*\]\(([^)\n]+)\)')),
+    ("path", re.compile(r'<mermaid\s+[^>]*?path="([^"]+)"')),
+    ("path", re.compile(r'<image\s+[^>]*?src="([^"]+)"')),
+    ("path", re.compile(r'<openapi\s+[^>]*?src="([^"]+)"')),
+    ("snippet", re.compile(r'<snippet\s+[^>]*?id="([^"]+)"')),
+    ("path", re.compile(r'\[drawio:([^:\]]+):[^\]]*\]')),
+]
+_EXTERNAL_RE = re.compile(r'^(?:[a-z][a-z0-9+.\-]*:|//)', re.IGNORECASE)
+
+
+def ls_files(repo_root: Path) -> list[str]:
+    proc = subprocess.run(["git", "-C", str(repo_root), "ls-files"],
+                           capture_output=True, text=True, timeout=60)
+    if proc.returncode != 0:
+        return []
+    return [l for l in proc.stdout.splitlines() if l]
+
+
+def parse_carrier(path: Path):
+    """Мини-парсер .nauta-delivery.yaml — семантика та же, что у bash
+    _delivery_carrier_records() выше в этом файле (та же блочная форма: вход в блок по
+    заголовку без отступа, выход — на первой строке без отступа). Не PyYAML: процесс не
+    смеет тянуть внешние зависимости (см. докстроку над run_link_integrity_delivery_gate)."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    version = None
+    excluded: list[dict] = []
+    delivered: list[dict] = []
+    cur_list = None
+    cur_entry = None
+
+    def flush():
+        nonlocal cur_entry
+        if cur_entry is not None:
+            (excluded if cur_entry["list"] == "excluded" else delivered).append(cur_entry)
+        cur_entry = None
+
+    for raw in lines:
+        if raw.startswith("version:"):
+            flush(); cur_list = None
+            version = raw.split(":", 1)[1].strip().strip('"')
+            continue
+        if re.match(r'^excluded:\s*(#.*)?$', raw):
+            flush(); cur_list = "excluded"; continue
+        if re.match(r'^delivered:\s*(#.*)?$', raw):
+            flush(); cur_list = "delivered"; continue
+        if re.match(r'^\S', raw):
+            flush(); cur_list = None; continue
+        if cur_list is None:
+            continue
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if re.match(r'^-\s*path:', stripped):
+            flush()
+            p = re.sub(r'^-\s*path:\s*', '', stripped).strip().strip('"')
+            cur_entry = {"list": cur_list, "path": p, "reason": False, "provenance": False}
+            continue
+        if re.match(r'^reason:\s*\S', stripped) and cur_entry is not None:
+            cur_entry["reason"] = True; continue
+        if re.match(r'^provenance:\s*\S', stripped) and cur_entry is not None:
+            cur_entry["provenance"] = True; continue
+    flush()
+    return version, excluded, delivered
+
+
+def compute_kept(all_files: list[str], excluded_entries: list[dict]):
+    """§2 шаг 2: KEPT — git ls-files минус excluded (якорение: точное совпадение для
+    корневого файла, startswith для каталога со слэшем — templates/root-prompt-layer/
+    CLAUDE.md обязан ОСТАТЬСЯ, если исключён только корневой CLAUDE.md, ADR-083 §1.2).
+    KEPT_DIRS — все каталоги-префиксы путей KEPT, не только непосредственный родитель."""
+    excl_dirs = [e["path"] for e in excluded_entries if e["path"].endswith("/")]
+    excl_files = {e["path"] for e in excluded_entries if not e["path"].endswith("/")}
+    kept = []
+    for f in all_files:
+        if f in excl_files:
+            continue
+        if any(f.startswith(d) for d in excl_dirs):
+            continue
+        kept.append(f)
+    kept_set = set(kept)
+    kept_dirs = set()
+    for f in kept:
+        parts = f.split("/")[:-1]
+        prefix = ""
+        for part in parts:
+            prefix += part + "/"
+            kept_dirs.add(prefix)
+    return kept_set, kept_dirs
+
+
+def resolve(base_dir: str, target: str, kept_set: set, kept_dirs: set):
+    """§2 шаг 6: lit ∈ KEPT, либо lit ∈ KEPT_DIRS, либо lit+'.md' ∈ KEPT, либо (без
+    завершающего слэша) lit+'/_index.md' ∈ KEPT. Порядок/семантика — как у
+    scripts/validate-content.py::_resolve_link_target, только цель ищется в СОСТАВЕ, не на
+    диске (Д2)."""
+    ends_slash = target.endswith("/")
+    combined = target if base_dir in ("", ".") else f"{base_dir}/{target}"
+    lit = posixpath.normpath(combined)
+    if lit in kept_set:
+        return True, lit
+    if (lit + "/") in kept_dirs:
+        return True, lit
+    if (lit + ".md") in kept_set:
+        return True, lit
+    if not ends_slash and (lit + "/_index.md") in kept_set:
+        return True, lit
+    return False, lit
+
+
+def main() -> int:
+    # §2 шаг 1: дерево без своей истории git — «нечего проверять», не «не смог проверить»
+    # (ADR-007 Д1), форма — как у delivery-composition (сравнение через realpath, не строки:
+    # macOS расходится на /var против /private/var).
+    git_top_proc = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--show-toplevel"],
+                                   capture_output=True, text=True, timeout=30)
+    git_top = git_top_proc.stdout.strip()
+    same_tree = False
+    if git_top:
+        try:
+            same_tree = Path(git_top).resolve() == REPO_ROOT
+        except OSError:
+            same_tree = False
+    if git_top_proc.returncode != 0 or not git_top or not same_tree:
+        print(f"[INFO] {SECTION} не выполняется: у этого дерева нет своей истории git — источник")
+        print("       выборки git ls-files, поставка родится из истории (ADR-083 Д1/Д2). Это")
+        print('       "нечего проверять", не "не смог проверить" (ADR-007 Д1). Exit-код не меняется.')
+        return 0
+
+    if not CARRIER.is_file():
+        print(f"▶ {SECTION}")
+        print(f"  ✗ {SECTION} FAILED", file=sys.stderr)
+        print(f"  ERROR: носитель {CARRIER_NAME} отсутствует — состав поставки не прочитан, это не", file=sys.stderr)
+        print('  "нарушений нет" (ADR-007 Д1). Гейт delivery-composition сообщает об этом отдельно;', file=sys.stderr)
+        print(f"  здесь тот же факт назван для собственной секции {SECTION}.", file=sys.stderr)
+        return 1
+
+    version, excluded, delivered = parse_carrier(CARRIER)
+    if version != "1":
+        print(f"▶ {SECTION}")
+        print(f"  ✗ {SECTION} FAILED", file=sys.stderr)
+        print(f"  ERROR: {CARRIER_NAME} не прочитан по схеме — версия '{version}' незнакома,", file=sys.stderr)
+        print("  признаётся ровно 1 (ADR-073-spec §2.2). Состав поставки не проверен.", file=sys.stderr)
+        return 1
+
+    all_files = ls_files(REPO_ROOT)
+    kept_set, kept_dirs = compute_kept(all_files, excluded)
+
+    sources = sorted(f for f in kept_set if f == "README.md" or (f.startswith("docs/") and f.endswith(".md")))
+
+    print(f"▶ {SECTION}")
+    print(f"  проверена РАЗРЕШИМОСТЬ ссылок относительно состава поставки, а не истина текста")
+    print(f"  (ADR-076 Д3) — необходимый признак, не достаточный.")
+    if not excluded:
+        # Краевое условие §10 ADR-083-spec: пустой excluded: — «не смог проверить», НЕ
+        # «нечего исключать, всё резолвится» (замаскированный ложный зелёный). Печатается
+        # КАВЕАТОМ, а не отказом: гейт продолжает читать НОСИТЕЛЬ (а не константу) — реальное
+        # снятие исключения (delivered: пополняется явной записью) обязано оставаться
+        # наблюдаемо-зелёным, если после этого всё резолвится по существу.
+        print(f"  [INFO] excluded: пуст — форма прочитана по схеме, но границу подтвердить нечем")
+        print(f"  (пустой список не прочитан как \"всё в составе\", ADR-083-spec §10 краевое условие).")
+
+    errors: list[str] = []
+    scanned = 0
+    target_count = 0
+    snippet_seen = False
+    for source in sources:
+        full = REPO_ROOT / source
+        try:
+            text = full.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if has_placeholder(full):
+            # §2 шаг 4 / §4.1: объявленное исключение — ИМЕНОВАННАЯ строка [INFO], не
+            # молчаливый skip (AC-059-02: «объявленно не проверяется» ≠ «совпало с битым»).
+            print(f"  [INFO] {source} — исходящие ссылки не проверяются: объявленный шаблон (Д3)")
+            continue
+        scanned += 1
+        masked = mask_code(text)
+        base_dir = posixpath.dirname(source)
+        for kind, pattern in _LINK_PATTERNS:
+            for m in pattern.finditer(masked):
+                if kind == "snippet":
+                    snippet_seen = True
+                    continue
+                raw_target = m.group(1)
+                target = raw_target.split("#", 1)[0].strip("<>")
+                if not target:
+                    continue
+                if _EXTERNAL_RE.match(target):
+                    continue
+                target_count += 1
+                ok, lit = resolve(base_dir, target, kept_set, kept_dirs)
+                if not ok:
+                    errors.append(f'  ERROR: {source}: ссылка "{raw_target}" не входит в состав поставки — {lit}')
+
+    if snippet_seen:
+        print(f"  [INFO] {SECTION}: форма snippet вне области — .gramax/ не входит в поставку (§2)")
+
+    if errors:
+        for e in errors:
+            print(e, file=sys.stderr)
+        print(f"  ✗ {SECTION} FAILED", file=sys.stderr)
+        return 1
+
+    print(f"  ✓ {SECTION} (состав {len(kept_set)}, источников {scanned}, целей {target_count})")
+    return 0
+
+
+sys.exit(main())
+PYEOF
+  if [[ "$rc" -ne 0 ]]; then
+    failed=1
+  fi
+}
+
+if [[ "$MODE" != "--secret-scan-only" ]]; then
+  run_link_integrity_delivery_gate
+fi
+
 if [[ "$MODE" != "--delivery-composition-only" ]]; then
   run_secret_scan_tree_gate
 fi
@@ -1065,6 +1375,25 @@ if [[ "$MODE" == "--full" ]]; then
   # эта же задача) — на реальном дереве даёт `OK: 0 нарушений`, не молчал раньше по причине
   # отсутствия вызова, а падал бы `ERROR: не найдены секции` до фикса.
   run_gate_if_declared "check-backlog-closure"
+
+  # check-onboarding-staleness (ADR-083 Д4, спутник §4.2/§1.4; DEV-133 по находке ревью
+  # DEV-132 — «сторож без вызывающего»: `grep -rn check-onboarding-staleness --include=*.sh
+  # --include=*.py .` за пределами tests/ и своего же файла давал пусто до этой правки).
+  # Живёт в --full, не --fast, по тому же основанию, что check-backlog-closure выше: предмет —
+  # версия ПЛАГИНА (`.claude-plugin/plugin.json`) против онбординг-текста README.md/docs/**,
+  # а не отдельный коммит — между правкой текста и бампом version в норме проходят коммиты
+  # эпика, и --fast бил бы по каждому из них.
+  #
+  # Вызывается БЕЗ аргументов (`run_gate_if_declared`, ADR-037-spec §3) — гейт получил
+  # умолчание `--root` от `__file__` этой же правкой, иначе первый же прогон падал бы на
+  # разборе argparse (`--root` был `required=True`).
+  #
+  # Предмет — этот же репозиторий (README.md/docs/getting-started.md/docs/upgrading-the-
+  # plugin.md контура разработки nauta), не поставка потребителю: `bin/deliver.sh` эту
+  # позицию НЕ доставляет (PAYLOAD_FILES её не несёт), онбординг-текст потребителя — не
+  # nauta'шный README. Дерево-потребитель получит объявленное молчание (INFO-NOT-DELIVERED,
+  # ADR-037 §3) и exit-код не изменится.
+  run_gate_if_declared "check-onboarding-staleness"
 
   # id-check (ADR-038 Д3/Д8, ADR-038-spec §4.3/§5; решение владельца Р22, roadmap 2026-08-18)
   # — коллизии, невозврат отменённого номера, расхождение реестра .nauta-ids.yaml с корпусом.
