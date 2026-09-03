@@ -138,12 +138,20 @@ promptLayerSizeBudget:
 # измерено companion ADR-025), исполняются в обоих профилях. full: — test-onboard.sh
 # (~33 с, на два порядка дороже) исполняется только в --full, тем же основанием, каким
 # уже практика проекта третирует его как предпубликационную, а не подкоммитную проверку.
+#
+# test-release-delivery-tails.sh (DEV-002, ktalk-plugin-ke5.14) — тоже full:, не fast:, тем
+# же основанием (живые подпроцессы claude/check.sh, ~1 мин, не ~0,5 с). Сама сьюта на своих
+# живых вызовах check.sh --fast/--full (AC-14e..h) исполняет их НЕ на этом дереве, а на
+# изолированной копии без .git и без собственной строки в её .nauta-gates.yaml — иначе
+# подключение здесь ниже дало бы бесконечную рекурсию (check.sh запускает сьюту, та снова
+# запускает check.sh). Подробности и доказательство завершимости — отчёт задачи DEV-002.
 projectGates:
   fast:
     - scripts/check-plugin-composition.sh
     - scripts/check-prompt-language.sh
   full:
     - scripts/test-onboard.sh
+    - scripts/test-release-delivery-tails.sh
 
 # branchDiscipline — объявленный, а не выводимый профиль (ADR-025 Д7). Репозиторий уже
 # живёт профилем single практически: одна ветка роли на рабочую копию

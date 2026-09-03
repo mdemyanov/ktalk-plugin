@@ -430,7 +430,29 @@ assert_contains "AC-14b" "projectGates.fast называет scripts/check-plugi
 assert_contains "AC-14c" "projectGates.fast называет scripts/check-prompt-language.sh" "$GATES_TEXT" "scripts/check-prompt-language.sh"
 assert_contains "AC-14d" "projectGates.full называет scripts/test-onboard.sh" "$GATES_TEXT" "scripts/test-onboard.sh"
 
-FAST_OUT="$(bash "$ROOT/scripts/check.sh" --fast 2>&1)"
+# Живые вызовы check.sh — DEV-002 (ktalk-plugin-ke5.14), Вариант B (изолированная копия
+# дерева, не часовой вложенности через переменную окружения). Эта сьюта сама зарегистрирована
+# в projectGates.full корневого .nauta-gates.yaml (см. ниже AC-14d и коммит DEV-002) — вызов
+# bash "$ROOT/scripts/check.sh" --full ОТСЮДА воспроизводимо давал бесконечную рекурсию
+# (check.sh запускает эту сьюту → сьюта снова запускает check.sh --full → …), проверено и
+# остановлено вручную (pkill -9) при разработке DEV-002, отчёт координатору эпика. Копия
+# дерева без .git — тот же приём, что MIRROR40/43/44A/44B в scripts/test-onboard.sh; её
+# .nauta-gates.yaml лишён СВОЕЙ строки-самоссылки под full: (grep -v -F по буквальному пути,
+# а не переписывание блока с нуля — переживает будущий дрейф остальных позиций projectGates).
+# check.sh копии физически не может вызвать эту сьюту повторно — рекурсии нет по построению
+# копии, не по соглашению о переменной окружения (граница глубины 1 гарантирована структурой
+# фикстуры, не проверяется в рантайме). Носитель четырёх живых ассертов НЕ меняется при вложенном
+# запуске (эта же сьюта как позиция projectGates.full реального $ROOT): AC-14e-h исполняются
+# по-настоящему в обоих контекстах — и при прямом прогоне QA-runner'ом, и внутри check.sh
+# --full реального дерева, — а не переходят в SKIP ни в одном из них (at-design.md,
+# «Не покрывается» этой задачей не пополняется — носитель не сменился, полнота сохранена).
+TMP14="$(mktemp -d)"
+MIRROR14="$TMP14/mirror-check-live"
+cp -r "$ROOT" "$MIRROR14"
+rm -rf "$MIRROR14/.git"
+grep -v -F 'scripts/test-release-delivery-tails.sh' "$GATES_YAML" > "$MIRROR14/.nauta-gates.yaml"
+
+FAST_OUT="$(bash "$MIRROR14/scripts/check.sh" --fast 2>&1)"
 assert_not_contains "AC-14e" "check.sh --fast больше не печатает 'projectGates: absent' (гейт подключён, не декоративно упомянут)" \
   "$FAST_OUT" "projectGates: absent"
 assert_contains "AC-14f" "check.sh --fast исполняет и отражает scripts/check-plugin-composition.sh как позицию projectGates" \
@@ -438,9 +460,10 @@ assert_contains "AC-14f" "check.sh --fast исполняет и отражает
 assert_contains "AC-14g" "check.sh --fast исполняет и отражает scripts/check-prompt-language.sh как позицию projectGates" \
   "$FAST_OUT" "▶ scripts/check-prompt-language.sh"
 
-FULL_OUT="$(bash "$ROOT/scripts/check.sh" --full 2>&1)"
+FULL_OUT="$(bash "$MIRROR14/scripts/check.sh" --full 2>&1)"
 assert_contains "AC-14h" "check.sh --full дополнительно исполняет scripts/test-onboard.sh (только в full:, не в fast:)" \
   "$FULL_OUT" "▶ scripts/test-onboard.sh"
+rm -rf "$TMP14"
 
 echo
 echo "###############################################################################"
