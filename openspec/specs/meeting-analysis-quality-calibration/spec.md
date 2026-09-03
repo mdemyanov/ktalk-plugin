@@ -3,8 +3,8 @@
 ## Purpose
 
 Governs four calibration properties of the meeting-analysis prompt layer
-(`agents/ktalk-processor.md`, `agents/references/two-pass-analysis.md`,
-`skills/ktalk-registry/references/analysis-quality.md`, `agents/references/protocol-template.md`)
+(`agents/ktalk-processor.md`, `references/ktalk-processor/two-pass-analysis.md`,
+`skills/ktalk-registry/references/analysis-quality.md`, `references/ktalk-processor/protocol-template.md`)
 found by three `ktalk-eval` runs across meeting types: a commitment named in the draft's prose
 SHALL NOT go missing from the `Договорённости` table without a recorded reason; `confidence`
 SHALL track the acceptance utterance, not the mood of the request; every proper name — a

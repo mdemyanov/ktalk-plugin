@@ -27,8 +27,7 @@ design, each in the role assigned below.
 
 #### Scenario: A reference file loaded from an entry point
 
-- **WHEN** a file under `agents/references/`, `skills/*/references/` or `references/` states
-  an instruction
+- **WHEN** a file under `skills/*/references/` or `references/` states an instruction
 - **THEN** that instruction SHALL be in English on the same terms as an entry point
 
 ### Requirement: Cyrillic is legal only in three syntactic contexts
@@ -70,7 +69,7 @@ improvement.
 
 #### Scenario: The meeting protocol template
 
-- **WHEN** `agents/references/protocol-template.md` is edited under this capability
+- **WHEN** `references/ktalk-processor/protocol-template.md` is edited under this capability
 - **THEN** the Russian headings and table headers inside its fenced block — including
   `## Участники`, `## Ключевые решения`, `## Договорённости` — SHALL be byte-identical to
   their pre-migration form
