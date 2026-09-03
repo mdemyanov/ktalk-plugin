@@ -263,6 +263,130 @@ issue, устраняет гонку ценой параллелизма, рад
 `CLAUDE.md` обещает как процесс, и тем, что автоматика реально исполняет без участия памяти
 человека.
 
+## Приёмка (BA-003)
+
+Приёмка волны хвостов релиза 1.9.0 (эпик `ktalk-plugin-ke5`, лист `.17`) против capability-спеки
+`openspec/specs/release-delivery-tails/spec.md` (9 `### Requirement:`, 16 `#### Scenario:`) —
+чтением дерева и живыми прогонами команд (`claude plugin tag --dry-run --force`, `claude plugin
+validate .`, `ktalk --help`, `bash scripts/check.sh --fast`/`--full`, `bash
+scripts/test-release-delivery-tails.sh`, `bash scripts/check-plugin-composition.sh`, `npx -y
+@fission-ai/openspec@1.8.0 validate --specs --strict`), не по самоотчётам ролей. Диапазон
+изменений — `0550e87..3fa5c30` (18 коммитов).
+
+| AC | Requirement / Scenario | Вердикт | Доказательство |
+|----|----|----|----|
+| AC-1 | Release tag / резолвится в форме платформы | принят | `claude plugin tag --dry-run --force` → `Version: 1.10.0 (from plugin.json)`, `Tag: ktalk--v1.10.0` — форма `<plugin>--v<version>`, не голая `v1.10.0` |
+| AC-2 | Marketplace manifest / description без предупреждения | принят | `.claude-plugin/marketplace.json` несёт top-level `"description": "Marketplace одного плагина ktalk…"` отдельно от `plugins[0].description`; `claude plugin validate .` → `✔ Validation passed`, без предупреждений |
+| AC-3 | Documented update path / переводит установленную копию | принят | `README.md:29-38` — команды `claude plugin marketplace update ktalk-plugins` → `claude plugin update ktalk@ktalk-plugins` → «перезапустите сессию», в этом порядке, с явным пояснением, что первой команды недостаточно; поведенческое доказательство перехода `installed_plugins.json` — живой прогон ADR-025 Context (`1.5.0 → 1.9.0`, сообщение платформы «Restart to apply changes») |
+| AC-4 | Reference file / не в списке агентов сессии | принят | `find agents references -type f` — под `agents/` только `ktalk-evaluator.md`, `ktalk-processor.md`; три справочника под `references/ktalk-processor/`; `claude plugin tag --dry-run --force` в этой сессии не выдаёт ни одного предупреждения «No frontmatter block found» (до переезда — по всем трём файлам, ADR-025 Context) |
+| AC-5 | Every agent-carrying file / ссылки резолвятся | принят | `grep -noE` по `agents/ktalk-processor.md` — 8 вхождений `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/{two-pass-analysis,protocol-template,vault-update-and-report}.md`, 0 голых `references/<файл>.md`; все три файла физически существуют (см. AC-4); пять внешних цитирующих файлов обновлены на новый путь: `skills/ktalk-eval/references/eval-rubric.md:95,111`, `skills/ktalk-registry/references/analysis-quality.md:81`, `skills/ktalk-registry/references/registry-format.md:153`, `openspec/specs/meeting-analysis-quality-calibration/spec.md:6-7`, `openspec/specs/prompt-language-boundary/spec.md:72` |
+| AC-6 | Retired package identity / метаданные не называют | принят | `grep -n "ktalk-mcp" content/.doc-root.yaml .nauta-gates.yaml` — пусто; живая мутация `compat.json.package_name` → `ktalk-synthetic-zz` в этой сессии не породила совпадений ни `ktalk-mcp`, ни синтетического имени в тех же двух файлах (мутация откачена после проверки, `git status --short` пуст) |
+| AC-7 | README claims / только реальные интерфейсы | принят | `README.md:63` — путь `~/.config/ktalk-mcp/token` (конфигурация, не имя пакета, по замыслу Д6 не трогается); `README.md:83-84` — «плагин не объявляет MCP-поверхность и не несёт собственного `.mcp.json`»; `ktalk --help \| grep -iE "mcp\|serve"` — exit 1, ничего не найдено |
+| AC-8 | Processor / не вызывает project-curator напрямую | принят | `agents/ktalk-processor.md:344-360` «Final step — reporting affected projects» — только строка `Проекты затронуты: {ids}`, без вызова; `tools:` (строки 9-19) — закрытый список без инструмента вызова субагента |
+| AC-9 | Orchestrator / вызывает ровно один раз после завершения всех | принят | `skills/ktalk-registry/SKILL.md:233-252`, шаг 5.5 — union по всем агентам прогона, «call project-curator exactly one time, at most once per run, never once per agent» |
+| AC-10 | project-curator не установлен | принят | `skills/ktalk-registry/SKILL.md:248-249` — «if that call does not resolve... catch it and add to the run's summary»; `agents/ktalk-processor.md` больше не проверяет установленность curator — репортирует id безусловно (Final step) |
+| AC-11 | Совпадающий транскрипт / без лишнего шага | принят | `agents/ktalk-processor.md:144-155`, шаг 2b — «Match... proceed straight to analysis, no extra step, no dialogue with the operator; the check is silent and automatic» |
+| AC-12 | Несовпадение / повтор ровно один раз | принят | `agents/ktalk-processor.md:156-158` — «Re-fetch the same {recording_id}... exactly one time — one retry, never a loop» |
+| AC-13 | Несовпадение после повтора / жёсткая остановка | принят | `agents/ktalk-processor.md:162-166` — «hard stop. Do not build, save, or archive anything... does not carry the ✅ Встреча обработана header»; сохранение в архив перенесено на строки 168-172, после подтверждения личности (Д4 ADR-026) |
+| AC-14 | Гейты состава/языка в автоматическом прогоне | принят | `.nauta-gates.yaml:148-154` — `projectGates.fast: [check-plugin-composition.sh, check-prompt-language.sh]`, `projectGates.full: [test-onboard.sh, test-release-delivery-tails.sh]`; `bash scripts/check.sh --fast` реально исполняет и отражает обе позиции `fast:`; `bash scripts/check.sh --full` — `✓ check.sh --full — passed`, дополнительно исполняет `test-onboard.sh` и `test-release-delivery-tails.sh` |
+| AC-15 | Дисциплина ветвления объявлена, не undetermined | принят | `.nauta-gates.yaml:159-160` — `branchDiscipline.profile: single`; `bash scripts/check.sh --fast` → `OK: профиль дисциплины ветвления — single` (не `undetermined`) |
+| AC-16 | Базис доставки гейтов не отстаёт молча | принят условно | `bash scripts/check.sh --fast` печатает три явных `[INFO]` («не доставлен... базис (nauta 0.27.0)... его не заявляет») с прямым путём починки (`/nauta:sync-scripts`); `find ~/.claude/plugins/cache/nauta/nauta -maxdepth 1` подтверждает установленную `0.28.2`. Разрыв физически не закрыт (три гейта по-прежнему отсутствуют в дереве) — но не тихий: назван явно при каждом прогоне, а полное закрытие сознательно вынесено отдельной задачей вне этого эпика (ADR-025 Д7). Читаю Requirement как «не молчать», не «закрыть в этом раунде» — при буквальном чтении «SHALL NOT be missing» разрыв остаётся открытым, поэтому — условно, не безусловно |
+
+**16/16 сценариев закрыты**: 15 принято безусловно, 1 (AC-16) — условно, с названной причиной,
+не дефект кода. Живые команды из брифа координатора — все 13 с `RC=0` (см. также
+`content/60-implementation/test-reports/004-2026-09-03.md`); `bash
+scripts/test-release-delivery-tails.sh` — `PASS=54 FAIL=0 SKIP=3` в этой сессии, три `SKIP`
+(AC-3e, AC-15d, AC-16-поведенческий) перепроверены по существу ниже.
+
+**Перепроверка трёх `SKIP` теста (носитель — не только упомянут, а существует физически).**
+AC-3e (поведенческий переход `installed_plugins.json`): носитель — будущий релизный рансбук
+DevOps по образцу `content/70-operations/2026-08-31-cli-only-boundary-release-runbook.md` и
+`…package-rename-transition-release-runbook.md` (оба физически существуют, оба несут раздел
+«Ломающее изменение» по тому же образцу); рансбук релиза 1.10.0 действительно ещё не заведён
+(`find content/70-operations -iname "*1.10*"` — пусто) — обязательство названо, не закрыто.
+AC-15d (`single`/`team` дают разный вердикт): носитель — `_guard_branch_names()` в
+`scripts/check-branch-discipline.py`, измеримо не читает `profile` (`grep team
+scripts/check-branch-discipline.py` — только в `PROFILES` и текстах ошибок, не в логике
+сторожа) — воспроизведено. AC-16: носитель — ручная процедура при `/nauta:sync-scripts`;
+`.nauta-scripts-basis.yaml:5` называет `0.27.0`, кеш плагина физически несёт `0.28.2` —
+воспроизведено. Ни один носитель не оказался фантомным.
+
+**Проверка каталогов агентов и справочников — обе половины.** `find agents references -type f`
+(см. AC-4) подтверждает отсутствие трёх файлов под `agents/`; `grep -noE
+'\$\{CLAUDE_PLUGIN_ROOT\}/references/[A-Za-z0-9_/.-]+\.md'` по `agents/ktalk-processor.md`
+подтверждает, что все 8 ссылок резолвятся на существующие файлы (см. AC-5) — односторонняя
+проверка была бы ложноположительной: файл, переехавший в нерезолвящийся путь, тоже перестал
+бы быть «под `agents/`».
+
+**Промт-слой ADR-026 — прочитан целиком, не по цитате.** Шаг 2b `agents/ktalk-processor.md`
+(строки 144-180) и шаг 5.5 `skills/ktalk-registry/SKILL.md` (строки 233-252) описывают ровно то,
+что постановили Д1-Д5 ADR-026: ровно один повтор при несовпадении, жёсткая остановка без
+сохранения при устойчивом расхождении (не диалог с оператором, не тихое продолжение); вызов
+`project-curator` — оркестратором, не чаще одного раза на прогон, с явным логированием пропуска
+при неустановленном агенте.
+
+## Ломающее изменение
+
+Раздел обязателен условием, предшествующим гейту приёмки эпика. В этом репозитории нет
+`CHANGELOG.md` и нет `scripts/check-breaking-change-section.py` — генерируемый гейт из общего
+шаблона акцептанс-режима здесь `н/д`; но три кандидата, названные брифом координатора, разобраны
+по существу ниже, вручную, по образцу «Симптом → Причина → Починка → Что не изменилось», уже
+установленному прецедентом `content/70-operations/2026-08-31-cli-only-boundary-release-runbook.md`
+(раздел «Ломающее изменение: снятие MCP-поверхности»).
+
+**Кандидат 1 — три `agents/references/*.md` пропадают из списка агентов сессии.** Не ломающее.
+До этой волны все три файла давали `claude plugin tag --dry-run` предупреждение «No frontmatter
+block found» (ADR-025 Context) — платформа сканировала их как кандидатов в агенты по расположению,
+но ни один не нёс осмысленного фронтматтера (`name`/`description`/`tools`), и ни один промт,
+навык или README этого дерева никогда не называл их как вызываемые агенты («Что умеет» в README
+их не перечисляет). Удаление случайной регистрации, на которую ни один работающий сценарий не
+опирался, — починка дефекта того же класса, что и переименование retired-имени (урок
+2026-09-02), не потеря контракта.
+
+**Кандидат 2 — `ktalk-processor` больше не вызывает `project-curator`; это делает оркестратор.**
+Смешанный случай, разобран по хозяевам. До волны шаг был предписан текстом промта, но структурно
+невыполним: `tools:` `ktalk-processor.md` никогда не нёс инструмента вызова субагента (закрытый
+список — `mcp__qmd__*`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`), и 02.09.2026 все четыре
+параллельных прогона подтвердили это фактом — «делегирование технически невыполнимо» — и вместо
+него правили карточки проектов напрямую через `Write`/`Edit`, в обход куратора, независимо от
+того, установлен ли `project-curator` у хозяина. Значит документированный контракт «обработчик
+вызывает куратора» не работал уже до этой волны ни у одного хозяина.
+- **У хозяина с установленным `project-curator`.** Улучшение, не потеря: вместо не сработавшего
+  вызова куратора и рискованной прямой правки карточки хозяин теперь получает один консолидированный
+  вызов `project-curator` на прогон (`SKILL.md:233-252`).
+- **У хозяина без `project-curator`.** Здесь регресс наблюдаемого поведения реален: раньше
+  `ktalk-processor` (в порядке импровизации, не по контракту) всё же правил карточки проектов
+  напрямую своими `Write`/`Edit`; после волны это прекращено полностью — обработчик только
+  репортирует id и останавливается (`agents/ktalk-processor.md:344-360`), а оркестратор явно
+  пропускает делегирование (`SKILL.md:248-249`, текст «project-curator не установлен — обновление
+  карточек пропущено»). Пропуск не тихий (он логируется в сводке прогона каждый раз), но нигде в
+  дереве сегодня не назван как переход в тексте, который читает оператор релиза (`CHANGELOG.md`
+  нет, рансбук 1.10.0 не заведён — см. AC-3e выше). Итоговая оценка: не ломающее в смысле
+  «удалённый публичный интерфейс» (прежнее поведение само было незадокументированной
+  импровизацией конкретного набора прогонов, не контрактом), но пробел раскрытия — рекомендация
+  DevOps ниже.
+
+**Кандидат 3 — версия 1.9.0 → 1.10.0 (minor), коммит `ac09cd5` помечен `!`.** Не согласен с
+маркировкой коммита — законный исход по инструкции задачи. По прецеденту этого дерева (`!` +
+футер `BREAKING CHANGE:` с точным перечнем того, что исчезает — коммит `69ef207`, снятие
+MCP-поверхности) маркировка `!` резервируется для коммита, который убирает или меняет наблюдаемую
+публичную возможность, и несёт `BREAKING CHANGE:` — `ac09cd5` не несёт такого футера вовсе
+(`git log -1 --format="%B" ac09cd5` — футера нет), а тело коммита описывает чисто механический
+подъём версии, вынужденный двумя внутренними гейтами (`check_prompt_version_sync()`, sha256-снимок
+`test-onboard.sh`), не изменение контракта, видимого потребителю. При этом коммиты, реально
+несущие наблюдаемые изменения волны — `234d79e` (переезд справочников) и `5b27f57` (проверка
+личности транскрипта + делегирование куратора) — не несут ни `!`, ни футера вовсе. Маркировка `!`
+стоит не на том коммите; сама minor-версия по существу (без публичного интерфейса, потерянного на
+уровне `plugin.json`/навыков/команд) корректна как minor. Это процессная находка команде, не
+блокер приёмки.
+
+**Итог раздела.** Ни один из трёх кандидатов не достигает планки, которую сам репозиторий уже
+установил для формального объявления «Ломающее изменение» (полное снятие публичной поверхности,
+как MCP) — формального `BREAKING CHANGE:`/раздела рансбука сегодня ни один не требует безусловно.
+Один actionable item — кандидат 2, хозяин без `project-curator` — назван явно DevOps в брифе
+координатора; носитель обязательства (будущий рансбук 1.10.0) уже назван AC-3e выше, не заводится
+новым.
+
 ## Инварианты и защитные ограничения
 
 **По существу:**
