@@ -133,9 +133,27 @@ For `1-1`, always run the full algorithm — the interaction history matters.
 ktalk get-transcript {recording_id} --chunk 0 --json
 ```
 
-The chunking contract (chunk=0 means auto): a small transcript (≤30000 characters) comes
-back as plain markdown; a large one as JSON with `result` / `chunk` / `total_chunks` /
-`has_more` / `total_characters`.
+The chunking contract (chunk=0 means auto). With `--json` — the call above, always — the
+response is the `ktalk-cli` 2.0.0 envelope in EVERY case, small transcript or large:
+`{"transcript": {...}, "identity_check": {"result", ...}}` — read everything from `.transcript`,
+never from the JSON's top level. The envelope's `identity_check` (`match` / `mismatch` /
+`inconclusive` / `not_checked`, the CLI's own check, on by default) is informational only here
+— step 2b below is the plugin's own check and does not read `identity_check`.
+
+`.transcript` itself takes one of two shapes — told apart by which keys it carries, not by
+size, and neither is ready-made prose:
+- **A small transcript** (≤30000 characters, one fetch, no pagination) — the full transcript
+  object: a `tracks` array, each track a `speaker` reference plus a `chunks` list of
+  timestamped utterances (`startTimeOffsetInMillis`, `text`). No `result`/`total_chunks` here.
+- **A large transcript** — a page object: `result` (a JSON-encoded array of flattened,
+  time-sorted `{speaker, timestamp_ms, text}` entries for that page), plus `chunk`,
+  `total_chunks`, `has_more`, `total_characters`.
+
+Either shape is raw data — render it into `**Speaker** [HH:MM:SS]: text` lines (one per
+utterance/entry, time-sorted) before analysing or saving anything from it. (Without `--json` —
+never called at this step — the CLI renders that prose itself and appends a trailing
+`[identity-check] <result>` line instead of the envelope; noted only so the two are not
+conflated.)
 
 Do not save this content yet and do not fetch any remaining chunks yet — step 2b verifies the
 fetched content's identity first; saving the transcript and fetching the rest of a large one
@@ -171,8 +189,11 @@ step 0b (you substitute the `{YYYY}` / `{date}` / `{type}` / `{title}` placehold
 `{title}` is `title_clean`: no emoji, spaces→hyphens, Cyrillic transliterated, at most 50
 characters). If the `transcript_archive` key is not declared, record the path as an explicit
 note in the final report and do not write the file to a guessed path. For a large transcript —
-only now fetch the remaining chunks (`--chunk 2`, `--chunk 3`, … up to `total_chunks`), strip
-the duplicated heading from every chunk but the first, and assemble them into a single text.
+only now fetch the remaining pages (`--chunk 2`, `--chunk 3`, … up to `total_chunks`). Each
+page's `.transcript.result` is a JSON-encoded array of entries, not markdown — there is no
+heading to strip; parse every page's `result` and concatenate the entry arrays across pages in
+fetch order (each page is already time-sorted internally), then render the combined timeline
+into `**Speaker** [HH:MM:SS]: text` lines, same as for a small transcript above.
 
 The saved file's format and frontmatter: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/two-pass-analysis.md`.
 

@@ -12,8 +12,8 @@
 ### 1. Поставьте пакет `ktalk-cli`
 
 ```bash
-uv tool install ktalk-cli==1.0.0
-ktalk --version       # ровно ktalk-cli 1.0.0 — шаг 3 опирается на `ktalk token`
+uv tool install ktalk-cli==2.0.0
+ktalk --version       # ровно ktalk-cli 2.0.0 — шаг 3 опирается на `ktalk token`
 ```
 
 Плагин объявляет точную совместимую версию в `compat.json` — не порог, а пин: любое

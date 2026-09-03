@@ -53,7 +53,7 @@ exit code).
 | `ktalk set-vault-id <id> <ktalk_id> <vault_id>` | Bind a profile to a participant. |
 | `ktalk export [--out PATH] [--full]` | Regenerate the markdown mirror. |
 | `ktalk migrate <vault> [--dry-run]` | One-off import from the old markdown registries. |
-| `ktalk get-transcript <id> [--chunk N] [--chunk-size N]` | A recording's transcript (content reading). |
+| `ktalk get-transcript <id> [--chunk N] [--chunk-size N] [--no-verify-identity]` | A recording's transcript (content reading); with `--json` since 2.0.0 the response is always a `transcript`/`identity_check` envelope, identity check on by default. |
 | `ktalk get-summary <id>` | A recording's summary (content reading). |
 
 ## Deduplication and expiration (done by the CLI)

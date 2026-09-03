@@ -66,29 +66,29 @@ make_env
 
 # 3. версия ниже минимальной → 11
 make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.4.0"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.4.0 < 1.0.0 → 11"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.4.0 < 2.0.0 → 11"
 
 # 3a. 0.9.2 ниже 0.10.0 — сравнение посегментно-числовое, не лексикографическое
 make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.9.2"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.9.2 < 1.0.0 → 11"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 0.9.2 < 2.0.0 → 11"
 
 # 4. версия достаточна → 0
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 1.0.0 → 0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 2.0.0"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: 2.0.0 → 0"
 
 # 5 (AC-7, ADR-022 Д3 — пин симметричен, не порог). Версия ВЫШЕ пина тоже
 # несовместима: «новее» перестаёт быть безусловным OK, как было при пороге.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.2.3"
-"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 1.2.3 (новее пина 1.0.0) → 11, не молчаливый 0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 2.5.0"
+"$SCRIPT" check >/dev/null 2>&1; check_eq 11 $? "check: 2.5.0 (новее пина 2.0.0) → 11, не молчаливый 0"
 
 # 6. --version не поддержан, версия берётся из uv tool list
 make_env
 printf '#!/usr/bin/env bash\nexit 2\n' > "$TMP/bin/ktalk"; chmod +x "$TMP/bin/ktalk"
-stub uv 0 "ktalk-cli v1.0.0"
+stub uv 0 "ktalk-cli v2.0.0"
 "$SCRIPT" check >/dev/null 2>&1; check_eq 0 $? "check: fallback на uv tool list"
 
 # 7. --json печатает валидный JSON
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 2.0.0"
 OUT="$("$SCRIPT" check --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "check --json: валидный JSON"
@@ -135,13 +135,13 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # 15. санкция есть, установка успешна → 0
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 1.0.0
+stub_uv_installs 2.0.0
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: с санкцией → 0"
 
 # 16. пакет уже свежий → 0 и uv не вызывался (идемпотентность)
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-cli 1.0.0"
+stub ktalk 0 "ktalk-cli 2.0.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: уже установлен → 0"
 [ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: уже установлен — uv не вызывался"
@@ -188,15 +188,15 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
 stub ktalk 0 "ktalk-cli 0.4.0"
-stub_uv_installs 1.0.0 "Installed 1 executable: ktalk"
+stub_uv_installs 2.0.0 "Installed 1 executable: ktalk"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: устарел, есть allow_update → 0"
 grep -qx 'install' "$TMP/uv-args"; check_eq 0 $? "install: ремонт зовёт uv tool install, не upgrade (AC-8)"
-grep -q '^ktalk-cli==1\.0\.0$' "$TMP/uv-args"; check_eq 0 $? "install: аргумент называет пин явно — ktalk-cli==1.0.0 (AC-8)"
+grep -q '^ktalk-cli==2\.0\.0$' "$TMP/uv-args"; check_eq 0 $? "install: аргумент называет пин явно — ktalk-cli==2.0.0 (AC-8)"
 
 # 23. install --json на успехе → валидный JSON
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 1.0.0
+stub_uv_installs 2.0.0
 OUT="$("$SCRIPT" install --json 2>/dev/null)"
 printf '%s' "$OUT" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 check_eq 0 $? "install --json: валидный JSON на успехе"
@@ -267,10 +267,10 @@ grep -qx 'install' "$TMP/uv-args"; check_eq 0 $? "install: ветка обнов
 # 29 (FR-31). успешная установка совместимой версии → 0 и статус ok
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub_uv_installs 1.0.0
+stub_uv_installs 2.0.0
 OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install: индекс отдал 0.10.0 → 0"
 printf '%s' "$OUT" | grep -q '"status":"ok"'; check_eq 0 $? "install --json: статус ok при успехе"
-printf '%s' "$OUT" | grep -q '"installed_version":"1.0.0"'; check_eq 0 $? "install --json: installed_version при успехе"
+printf '%s' "$OUT" | grep -q '"installed_version":"2.0.0"'; check_eq 0 $? "install --json: installed_version при успехе"
 
 # 30 (DEV-007 дефект 1). uv tool list подтверждает версию, но ktalk не резолвится через
 # PATH (типовой случай ~/.local/bin не в PATH) — install не вправе молча сообщать успех;
@@ -318,7 +318,7 @@ check_json_telemetry "$OUT" 0 "install --json: нет allow_update — теле�
 
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-cli 1.0.0"
+stub ktalk 0 "ktalk-cli 2.0.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 OUT="$("$SCRIPT" install --json 2>/dev/null)"; check_eq 0 $? "install --json: уже свежий → 0"
 check_json_telemetry "$OUT" 0 "install --json: уже свежий — телеметрия честная (uv не вызывался)"
@@ -343,7 +343,7 @@ check_json_telemetry "$OUT" 0 "install --json: уже свежий — теле�
 # санкцию (32), а не молчаливый 0, как было при пороге (см. старый тест 5).
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-cli 1.2.3"
+stub ktalk 0 "ktalk-cli 2.5.0"
 printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/bin/uv"; chmod +x "$TMP/bin/uv"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 32 $? "install: версия НОВЕЕ пина без allow_update → 32, не молчаливый 0"
 [ -f "$TMP/uv-was-called" ]; check_eq 1 $? "install: версия новее пина без санкции — uv не вызывался"
@@ -353,26 +353,26 @@ printf '#!/usr/bin/env bash\ntouch "%s/uv-was-called"\nexit 0\n' "$TMP" > "$TMP/
 # не «безобидное движение вперёд», ADR-022 Д2).
 make_env; mkdir -p "$XDG_CONFIG_HOME/ktalk"
 printf 'allow_install = true\nallow_update = true\n' > "$XDG_CONFIG_HOME/ktalk/onboarding.toml"
-stub ktalk 0 "ktalk-cli 1.2.3"
-stub_uv_installs 1.0.0 "Installed 1 executable: ktalk"
+stub ktalk 0 "ktalk-cli 2.5.0"
+stub_uv_installs 2.0.0 "Installed 1 executable: ktalk"
 "$SCRIPT" install >/dev/null 2>&1; check_eq 0 $? "install: версия новее пина, есть allow_update → откат на пин → 0"
-grep -q '^ktalk-cli==1\.0\.0$' "$TMP/uv-args"; check_eq 0 $? "install: команда отката называет пин явно — ktalk-cli==1.0.0"
+grep -q '^ktalk-cli==2\.0\.0$' "$TMP/uv-args"; check_eq 0 $? "install: команда отката называет пин явно — ktalk-cli==2.0.0"
 
 # 34 (AC-7/AC-8). check --json: расхождение «версия НИЖЕ пина» — команда
 # ремонта в JSON называет пин явно, не голое имя пакета без версии.
 make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 0.4.0"
 OUT="$("$SCRIPT" check --json 2>/dev/null)"
-printf '%s' "$OUT" | grep -q '"install_command":"[^"]*1\.0\.0[^"]*"'
-check_eq 0 $? "check --json (версия ниже пина): install_command называет пин 1.0.0"
+printf '%s' "$OUT" | grep -q '"install_command":"[^"]*2\.0\.0[^"]*"'
+check_eq 0 $? "check --json (версия ниже пина): install_command называет пин 2.0.0"
 printf '%s' "$OUT" | grep -Eq '"install_command":"uv tool install ktalk-cli"'
 check_eq 1 $? "check --json (версия ниже пина): install_command — не голое имя пакета без версии"
 
 # 35 (AC-7/AC-8). check --json: расхождение «версия ВЫШЕ пина» — та же
 # гарантия, симметрично тесту 34.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.2.3"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 2.5.0"
 OUT="$("$SCRIPT" check --json 2>/dev/null)"
-printf '%s' "$OUT" | grep -q '"install_command":"[^"]*1\.0\.0[^"]*"'
-check_eq 0 $? "check --json (версия выше пина): install_command называет пин 1.0.0"
+printf '%s' "$OUT" | grep -q '"install_command":"[^"]*2\.0\.0[^"]*"'
+check_eq 0 $? "check --json (версия выше пина): install_command называет пин 2.0.0"
 
 # 36 (AC-7, класс «malformed/mistyped input»). ktalk печатает нераспознаваемую
 # версию (не semver, например билд-тег вместо релизной версии) — не крашится
@@ -488,11 +488,11 @@ check_eq 1 "$DOC_HIT" "документация: таблица retired MCP → 
 # и теряет пре-релизный суффикс ДО того, как строка попадает в version_eq —
 # сравнение видит уже урезанное «0.10.0», не «0.10.0rc1»/«0.10.0-rc1», и
 # признаёт rc-сборку равной пину. Обе типографии из репро координатора.
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0rc1"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 2.0.0rc1"
 "$SCRIPT" check >/dev/null 2>&1
 check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
 
-make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 1.0.0-rc1"
+make_env; stub uv 0 ""; stub ktalk 0 "ktalk-cli 2.0.0-rc1"
 "$SCRIPT" check >/dev/null 2>&1
 check_eq 11 $? "check (реальный путь): установлена пре-релизная 0.10.0-rc1 — код 11, не молчаливый 0 (installed_version теряет rc-суффикс)"
 
@@ -640,10 +640,37 @@ check_eq 1 $? "ktalk-processor.md: контракт описан как «тот
 # версия поднята тем же коммитом (1.10.0 -> 1.11.0, NFR-25 подтвердил дрейф
 # references/ktalk-processor/protocol-template.md прогоном) — снимок
 # перебазирован синхронно.
-EXPECTED_PROMPT_LAYER_SHA256="a045ac36763be945b30958c1f4f873199fdd2044ae7f7ae87db09f181acb43a9"
+#
+# ПЕРЕБАЗИРОВКА 2026-09-04 (плагин 1.12.0, синхронизация с ktalk-cli 2.0.0).
+# get-transcript получил включённую по умолчанию сверку идентичности
+# (identity_check) — побочно ломающее изменение формы JSON чанкированного
+# ответа: тело чанка уехало под ключ `transcript`. agents/ktalk-processor.md
+# (шаг 2, описание chunking-контракта) и справочные таблицы CLI-поверхности
+# (skills/ktalk-registry/SKILL.md, skills/ktalk-registry/references/registry-
+# format.md) обновлены под новый конверт; шаг 2b (собственная сверка
+# идентичности плагина, ADR-026 Д4) НЕ переписан на чтение identity_check —
+# это отдельное решение, вынесено в followup. Minor-версия поднята тем же
+# коммитом — снимок перебазирован синхронно.
+#
+# ПЕРЕБАЗИРОВКА 2026-09-04, раунд 2 (плагин остаётся 1.12.0 — новая версия
+# уже строго больше базы, повторный подъём не требуется). Первый раунд нёс
+# неверную находку: «малый транскрипт с --json приходит plain markdown» —
+# опровергнуто прогоном (не чтением) координатором: format_raw() всегда
+# json.dumps(data), markdown отдаётся ТОЛЬКО без --json (которого шаг 2 не
+# делает). Конверт transcript/identity_check присутствует ВСЕГДА при --json;
+# `.transcript` — либо полный объект транскрипта (tracks, малый), либо
+# объект страницы (result/chunk/total_chunks/has_more, большой) — различать
+# по набору ключей, не по размеру. Заодно исправлена смежная находка в этом
+# же шаге 2, вскрытая тем же прогоном: шаг «дочитать чанки и снять
+# задвоенный заголовок» предполагал markdown-чанкинг с заголовком, которого
+# в --json-режиме (chunk_transcript_raw) нет вовсе — result странице несёт
+# JSON-массив записей {speaker, timestamp_ms, text}, не текст с заголовком;
+# инструкция переписана под фактическую форму. Дефект не привнесён 2.0.0 —
+# существовал и раньше, вскрыт этим раундом верификации.
+EXPECTED_PROMPT_LAYER_SHA256="ed408e0cf8cc132c7f9eeeb3260b9bab338d9e16937f284b44a8cda0e4b40f35"
 ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands references -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
 check_eq "$EXPECTED_PROMPT_LAYER_SHA256" "$ACTUAL_PROMPT_LAYER_SHA256" \
-  "AC-1: содержимое skills/+agents/+commands/+references/ не изменилось со снимка (перебазирован на 1.11.0) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"
+  "AC-1: содержимое skills/+agents/+commands/+references/ не изменилось со снимка (перебазирован на 1.12.0) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"
 
 # 48 (AC-3 — wrong_package отличим от outdated по коду возврата, ADR-024 Д1/Д2,
 # outcome#3 брифа). Зеркало с НОВОЙ схемой compat.json (package_name/
