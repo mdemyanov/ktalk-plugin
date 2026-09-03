@@ -134,8 +134,12 @@ ktalk get-transcript {recording_id} --chunk 0 --json
 ```
 
 The chunking contract (chunk=0 means auto): a small transcript (≤30000 characters) comes
-back as plain markdown; a large one as JSON with `result` / `chunk` / `total_chunks` /
-`has_more` / `total_characters`.
+back as plain markdown; a large one as JSON — since `ktalk-cli` 2.0.0 wrapped in an envelope:
+`{"transcript": {"result", "chunk", "total_chunks", "has_more", "total_characters"}, "identity_check": {"result", ...}}`
+— read the chunk fields from `.transcript`, not from the JSON's top level. The envelope's
+`identity_check` (`match` / `mismatch` / `inconclusive` / `not_checked`, the CLI's own
+identity check, on by default) is informational only here — step 2b below is the plugin's own
+check and does not read `identity_check`.
 
 Do not save this content yet and do not fetch any remaining chunks yet — step 2b verifies the
 fetched content's identity first; saving the transcript and fetching the rest of a large one

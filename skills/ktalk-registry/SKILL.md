@@ -278,7 +278,7 @@ ktalk export
 | `ktalk set-vault-id <id> <ktalk_id> <vault_id>` | Bind a profile to a participant |
 | `ktalk export` | Regenerate the markdown mirror of the registry |
 | `ktalk-processor` agent | Process a recording (transcript + profile/project updates) |
-| `ktalk get-transcript <id> --json` | The transcript by chunks (`--chunk`, `--chunk-size`) |
+| `ktalk get-transcript <id> --json` | The transcript by chunks (`--chunk`, `--chunk-size`); since 2.0.0 wrapped in a `transcript`/`identity_check` envelope when chunked, identity check on by default (`--no-verify-identity` to disable) |
 | `ktalk get-summary <id> --json` | The meeting's summary and protocol |
 | `references/registry-format.md` | The data model: SQLite + CLI |
 | `references/analysis-quality.md` | The analysis-quality instructions for the agent |

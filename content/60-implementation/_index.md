@@ -19,6 +19,9 @@ title: Реализация
 - [2026-09-03-gate-perimeter-coverage-gap.md](2026-09-03-gate-perimeter-coverage-gap.md) —
   периметр AC-1/NFR-25 расширен на `references/` после переезда ADR-025 Д5, minor-версия
   1.10.0 → 1.11.0 (DEV-103, ktalk-plugin-igu)
+- [2026-09-04-cli-2-0-0-contract-sync.md](2026-09-04-cli-2-0-0-contract-sync.md) —
+  синхронизация промт-слоя с ломающим изменением `ktalk-cli` 2.0.0 (конверт
+  `transcript`/`identity_check` у `get-transcript`), minor-версия 1.11.0 → 1.12.0
 
 ## Правила
 
