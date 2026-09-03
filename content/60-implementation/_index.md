@@ -13,6 +13,9 @@ title: Реализация
 - [2026-09-03-projectgates-full-recursion-guard.md](2026-09-03-projectgates-full-recursion-guard.md)
   — подключение `test-release-delivery-tails.sh` к `projectGates.full` без рекурсии (DEV-002,
   ktalk-plugin-ke5.14)
+- [2026-09-03-quality-calibration-drift-closure.md](2026-09-03-quality-calibration-drift-closure.md)
+  — закрытие трёх пунктов дрейфа REV-002 в промт-слое калибровки анализа (DEV-101,
+  ktalk-plugin-109)
 
 ## Правила
 

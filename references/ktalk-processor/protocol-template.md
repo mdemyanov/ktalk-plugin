@@ -67,6 +67,24 @@ the same as nor a replacement for `[UNCLEAR]` (open questions of the meeting, a 
 section and a separate `unclear_count` counter) — two different meanings, two different
 tokens. `[ASR?]` does not count towards `unclear_count`.
 
+**Document-wide consistency of one name's marking:** `analysis-quality.md` §1a resolves (or
+marks `[ASR?]`) a given name once per processing run and caches the outcome; every further
+occurrence of that same name in the finished protocol carries the identical outcome — the
+cached result written again, not a fresh independent decision made anew at the point of
+writing. Two occurrences of one name disagreeing (one carries `[ASR?]`, the other does not) is
+a defect unless the protocol text states an explicit reason at the differing occurrence (for
+example, the transcript itself renders the name distorted at one mention and clean at another,
+so the two mentions are not the same input). Marking one occurrence and leaving another
+unmarked with no such stated reason is silent inconsistency, not an independent per-occurrence
+decision.
+
+**Zero decisions:** when `decisions_count` is `0`, the `Ключевые решения` table carries no
+rows, and the protocol text placed directly under the table states plainly that no decisions
+were found — a short Russian sentence such as `Решений в этой встрече не зафиксировано.` The
+table SHALL NOT be left as bare headers with nothing said below them, and a conditional wording
+(`может быть`, `если получится`) SHALL NOT be written into the table or the text as if it were
+a decision.
+
 Section order in the protocol: `Участники`, `Ключевые решения`, `Договорённости`,
 `Обновления статуса`, `Открытые вопросы`, `Флаги для владельца проекта`, `Заметки`,
 **`Ключевые тезисы`** (only for `meeting_type: session`; absent for every other meeting type —
