@@ -228,6 +228,7 @@ division (source: the ADR-018 spec, §3 `Разграничение верифи
 | §5 confidence for a particular accepting utterance present in **this** recording | reading one protocol (a direct comparison with the recording's transcript) |
 | Regression: the same transcript fragment yields a different confidence under a new prompt revision than under the old one | **only** an A/B comparison of two runs of one recording |
 | Robustness of a fix across meeting types (not a one-off success on a single recording) | **only** an A/B comparison across several recordings |
+| Growth of `decisions_count`/`commitments_count`/`unclear_count` between two prompt revisions of one recording, by itself | **not a defect by itself** — visible only via an A/B comparison of two runs of one recording; the defect determination follows only from §1 Method item 2 (each new row traces to an articulated acceptance), never from the direction the count moved |
 | NFR-25 AC1 (a minor version bump when the prompt layer changes) | a static diff script (`check-plugin-composition.sh`), not this rubric |
 
 The term "automatic check" used in the requirement's AC does not mean an existing automated
