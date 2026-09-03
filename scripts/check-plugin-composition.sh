@@ -137,8 +137,16 @@ PYEOF
 }
 check_no_mcp_server
 
-# NFR-25 (ADR-018 решение 7): правка промт-слоя анализа (agents/, skills/ktalk-registry/)
-# без подъёма minor-версии в .claude-plugin/plugin.json — провал. AC NFR-25 требует
+# NFR-25 (ADR-018 решение 7): правка промт-слоя анализа (agents/, skills/ktalk-registry/,
+# references/ktalk-processor/) без подъёма minor-версии в .claude-plugin/plugin.json —
+# провал. `references/ktalk-processor/` добавлен DEV-103 (ktalk-plugin-igu): коммит 234d79e
+# (ADR-025 Д5, релиз 1.10.0) увёл три файла ktalk-processor (two-pass-analysis.md,
+# protocol-template.md, vault-update-and-report.md) из agents/references/ в этот каталог —
+# они физически ушли из-под диапазона `agents/` ниже и выпали из-под NFR-25, оставшись
+# частью промт-слоя анализа по смыслу (те же файлы, что перечисляет трассировка FR-40/FR-41
+# требования 2026-08-19-analysis-quality-calibration.md). `references/onboarding.md` в этот
+# диапазон НЕ включён: он про онбординг, не про калибровку анализа — вне предмета этого NFR.
+# AC NFR-25 требует
 # буквально «minor-версия плагина поднята», не просто «файл изменился» и не любой рост —
 # правка одного лишь description или patch-инкремент (1.2.1→1.2.2) не проходит: patch
 # по семантике проекта — для правок вне промт-слоя (например, README), не для калибровки
@@ -157,7 +165,7 @@ check_prompt_version_sync() {
     fi
 
     local prompt_diff
-    prompt_diff=$(git diff --name-only "$base_ref" -- agents/ skills/ktalk-registry/ 2>/dev/null || true)
+    prompt_diff=$(git diff --name-only "$base_ref" -- agents/ skills/ktalk-registry/ references/ktalk-processor/ 2>/dev/null || true)
     if [ -z "$prompt_diff" ]; then
         return 0
     fi

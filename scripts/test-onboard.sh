@@ -623,10 +623,27 @@ check_eq 1 $? "ktalk-processor.md: контракт описан как «тот
 # вызова project-curator) переписаны, skills/ktalk-registry/SKILL.md получил
 # шаг 5.5. Minor-версия поднята тем же коммитом (NFR-25) — снимок
 # перебазирован синхронно, не отдельным раундом.
-EXPECTED_PROMPT_LAYER_SHA256="985865d4dafb08c412f9805b95d1e71fce11230efdabcbe422815f3eb0386978"
-ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
+#
+# ПЕРЕБАЗИРОВКА 2026-09-03, раунд 2 (плагин 1.11.0, DEV-103, ktalk-plugin-igu).
+# Периметр `find` расширен третьим каталогом `references` — тот самый переезд
+# 234d79e увёл три файла ktalk-processor из-под find agents (см. предыдущую
+# запись) НЕ ВНУТРЬ skills/agents/commands, а в новый top-level `references/`,
+# и снимок перестал их видеть вовсе: правка DEV-101 (281be92, содержимое
+# `references/ktalk-processor/protocol-template.md`) прошла мимо AC-1 и мимо
+# NFR-25 (scripts/check-plugin-composition.sh) одновременно — регресс покрытия,
+# найденный при слиянии волны, не самим снимком. Прецедент check-mcp-channel-
+# language.sh (DEV-102) уже трактует skills/+agents/+commands/+references/ как
+# один промт-слой из четырёх каталогов — снимок приведён к тому же периметру,
+# включая `references/onboarding.md` (не только `references/ktalk-processor/`):
+# AC-1 — общий сторож дрейфа всего промт-слоя, не только анализа (в отличие от
+# NFR-25, который сужен предметом требования до промт-слоя анализа). Minor-
+# версия поднята тем же коммитом (1.10.0 -> 1.11.0, NFR-25 подтвердил дрейф
+# references/ktalk-processor/protocol-template.md прогоном) — снимок
+# перебазирован синхронно.
+EXPECTED_PROMPT_LAYER_SHA256="a045ac36763be945b30958c1f4f873199fdd2044ae7f7ae87db09f181acb43a9"
+ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands references -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
 check_eq "$EXPECTED_PROMPT_LAYER_SHA256" "$ACTUAL_PROMPT_LAYER_SHA256" \
-  "AC-1: содержимое skills/+agents/+commands/ не изменилось со снимка (перебазирован на 1.9.0) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"
+  "AC-1: содержимое skills/+agents/+commands/+references/ не изменилось со снимка (перебазирован на 1.11.0) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"
 
 # 48 (AC-3 — wrong_package отличим от outdated по коду возврата, ADR-024 Д1/Д2,
 # outcome#3 брифа). Зеркало с НОВОЙ схемой compat.json (package_name/
