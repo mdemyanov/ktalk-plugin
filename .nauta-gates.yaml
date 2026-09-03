@@ -157,6 +157,7 @@ projectGates:
     - scripts/check-plugin-composition.sh
     - scripts/check-prompt-language.sh
     - scripts/check-mcp-channel-language.sh
+    - scripts/test-quality-calibration-drift.sh
   full:
     - scripts/test-onboard.sh
     - scripts/test-release-delivery-tails.sh
