@@ -78,7 +78,7 @@ account (if the profile is available):
 ## 3. Two-pass analysis
 
 The two-pass algorithm and the structured-extraction checklist are normative in
-`agents/references/two-pass-analysis.md` (sections A–E). They are not duplicated here.
+`references/ktalk-processor/two-pass-analysis.md` (sections A–E). They are not duplicated here.
 
 ---
 

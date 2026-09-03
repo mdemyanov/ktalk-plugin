@@ -100,7 +100,7 @@ promptLayerSizeBudget:
 #     severity: block
 #
 # РЕШЕНИЕ ktalk-plugin (2026-08-25): C13 остаётся absent ОСОЗНАННО — предмета нет.
-# ADR-012 (тонкая обёртка) держит прикладной код в отдельном пакете ktalk-mcp; в дереве
+# ADR-012 (тонкая обёртка) держит прикладной код в отдельно устанавливаемом CLI-пакете; в дереве
 # плагина только промты и bash. Измерено: `find . -name "*.groovy"` → 0; все 9 файлов
 # `find . -name "*.py" -not -path "*/__pycache__/*"` заявлены .nauta-scripts-basis.yaml,
 # то есть это доставка nauta, а не код этого репозитория. Включить C13 значило бы мерить
@@ -131,3 +131,30 @@ promptLayerSizeBudget:
 #     (ADR-030-spec §5, ADR-037 Д1/§3).
 # Способа выключить гейт молча нет ни у того, ни у другого: законна только объявленная
 # тишина и только там, где объявлен отказ от самого предмета проверки (ADR-007 Д1).
+
+# projectGates — GO-критерии CLAUDE.md, подключённые к исполнению, не только к памяти
+# (ADR-025 Д7, capability release-delivery-tails, Requirement «The GO-criterion gates
+# CLAUDE.md names are enforced automatically»). fast: — дешёвые проверки (~0,5 с вместе,
+# измерено companion ADR-025), исполняются в обоих профилях. full: — test-onboard.sh
+# (~33 с, на два порядка дороже) исполняется только в --full, тем же основанием, каким
+# уже практика проекта третирует его как предпубликационную, а не подкоммитную проверку.
+#
+# test-release-delivery-tails.sh (DEV-002, ktalk-plugin-ke5.14) — тоже full:, не fast:, тем
+# же основанием (живые подпроцессы claude/check.sh, ~1 мин, не ~0,5 с). Сама сьюта на своих
+# живых вызовах check.sh --fast/--full (AC-14e..h) исполняет их НЕ на этом дереве, а на
+# изолированной копии без .git и без собственной строки в её .nauta-gates.yaml — иначе
+# подключение здесь ниже дало бы бесконечную рекурсию (check.sh запускает сьюту, та снова
+# запускает check.sh). Подробности и доказательство завершимости — отчёт задачи DEV-002.
+projectGates:
+  fast:
+    - scripts/check-plugin-composition.sh
+    - scripts/check-prompt-language.sh
+  full:
+    - scripts/test-onboard.sh
+    - scripts/test-release-delivery-tails.sh
+
+# branchDiscipline — объявленный, а не выводимый профиль (ADR-025 Д7). Репозиторий уже
+# живёт профилем single практически: одна ветка роли на рабочую копию
+# (.claude/worktrees/<id>), история веток вида dev-014-…, epic-….
+branchDiscipline:
+  profile: single

@@ -75,8 +75,10 @@ The confirmation request format:
 ```
 ✅ Встреча обработана: "{recording_name}" — {date}
 
+Личность транскрипта: подтверждена (участники совпали с launch context)
 Транскрипт:  {путь по registry.routing.transcript_archive, или пометка "маршрут не объявлен"}
 Протокол:    {save_location или "не создавался"}
+Проекты затронуты: {ids, или "нет"}
 
 Автоматически обновлено:
   • {person}.md — сверка договорённостей: {N_updated} обновлено, {N_out_of_scope} вне области
@@ -93,9 +95,27 @@ The confirmation request format:
   • [если строка «Открытых договорённостей» не прошла разбор (шаг 5.5
     ktalk-processor.md: неэкранированный пайп, дата вне двух принятых форм) —
     строка и причина, статус не менялся]
+  • [если шаг 2b потребовал повтора и совпадение нашлось только на второй попытке]
+    get-transcript вернул чужие данные при первой попытке, устранено повтором
 
 Флаги для владельца проекта:
   • [если есть — см. two-pass-analysis.md, пункт E]
 
 Реестр обновлён: ktalk mark-done {recording_id} (статус → done)
+```
+
+### Hard-stop report (transcript identity unresolved after the retry)
+
+When step 2b's retry still does not confirm participants, the meeting was NOT processed — the
+report does not carry the `✅ Встреча обработана` header, and nothing about the transcript,
+protocol, or vault is claimed as done:
+
+```
+⛔ Обработка остановлена: recording_id {recording_id}
+
+Личность транскрипта не подтверждена: после повтора участники, найденные в полученном
+содержимом ({participants actually found}), не совпали с ожидаемыми участниками встречи
+({participants из launch context}).
+
+Ничего не сохранено и не архивировано — реестр помечен: ktalk mark-partial {recording_id}.
 ```

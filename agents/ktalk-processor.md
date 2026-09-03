@@ -44,9 +44,9 @@ The host project's directory layout is not hard-coded in this prompt — it is r
 `ktalk config show --json` (step 0b). Act on the values it returns for THIS project, not on
 the examples in this file.
 
-Analysis-quality rules: `references/two-pass-analysis.md`
-Protocol template: `references/protocol-template.md`
-Hybrid update and final report: `references/vault-update-and-report.md`
+Analysis-quality rules: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/two-pass-analysis.md`
+Protocol template: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/protocol-template.md`
+Hybrid update and final report: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/vault-update-and-report.md`
 
 ---
 
@@ -137,17 +137,44 @@ The chunking contract (chunk=0 means auto): a small transcript (≤30000 charact
 back as plain markdown; a large one as JSON with `result` / `chunk` / `total_chunks` /
 `has_more` / `total_characters`.
 
-For a large transcript — fetch the remaining chunks (`--chunk 2`, `--chunk 3`, … up to
-`total_chunks`), strip the duplicated heading from every chunk but the first, and assemble
-them into a single text.
+Do not save this content yet and do not fetch any remaining chunks yet — step 2b verifies the
+fetched content's identity first; saving the transcript and fetching the rest of a large one
+are both deferred until that verification succeeds.
 
-Save the result following the `registry.routing.transcript_archive` template from step 0b (you
-substitute the `{YYYY}` / `{date}` / `{type}` / `{title}` placeholders yourself; `{title}` is
-`title_clean`: no emoji, spaces→hyphens, Cyrillic transliterated, at most 50 characters). If
-the `transcript_archive` key is not declared, record the path as an explicit note in the final
-report and do not write the file to a guessed path.
+### 2b. Verify the fetched transcript's identity
 
-The saved file's format and frontmatter: `references/two-pass-analysis.md`.
+`get-transcript`'s response echoes back neither the requested `recording_id` nor a duration —
+the participants named in the fetched content are the only identity signal it carries (issue
+#5: a race in the CLI's own cache once returned another recording's transcript with a valid
+JSON, code 0, nothing in the response distinguishing the swap). Before trusting chunk 0 for
+anything, extract the speaker names mentioned in it and compare them against
+`participants[].name` from your launch context for this `recording_id`.
+
+- **Match.** At least one name found in the fetched content matches a name from
+  `participants`. Participants are confirmed — proceed straight to analysis, no extra step, no
+  dialogue with the operator; the check is silent and automatic.
+- **Mismatch.** None of the fetched names match. Re-fetch the same
+  `{recording_id} --chunk 0 --json` exactly one time — one retry, never a loop — and compare
+  the new result by the same rule.
+  - The retry matches — participants are confirmed. Add one line to the final report's
+    `Требует внимания` section: `get-transcript вернул чужие данные при первой попытке, устранено повтором` — a transient race that self-resolved still leaves a visible trace, not
+    silence.
+  - The retry still mismatches — **hard stop**. Do not build, save, or archive anything from
+    this unconfirmed content: skip the remaining chunks, skip step 2.5 and everything after it,
+    and call `ktalk mark-partial {recording_id}` — no attachment flags, since nothing here was
+    confirmed to attach. The final report names the requested `recording_id` and the
+    participants actually found in the fetched content, and does not carry the `✅ Встреча обработана` header — the meeting was not processed.
+
+Only once participants are confirmed (on the first fetch or after the one retry) — not
+before — save the result following the `registry.routing.transcript_archive` template from
+step 0b (you substitute the `{YYYY}` / `{date}` / `{type}` / `{title}` placeholders yourself;
+`{title}` is `title_clean`: no emoji, spaces→hyphens, Cyrillic transliterated, at most 50
+characters). If the `transcript_archive` key is not declared, record the path as an explicit
+note in the final report and do not write the file to a guessed path. For a large transcript —
+only now fetch the remaining chunks (`--chunk 2`, `--chunk 3`, … up to `total_chunks`), strip
+the duplicated heading from every chunk but the first, and assemble them into a single text.
+
+The saved file's format and frontmatter: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/two-pass-analysis.md`.
 
 **IMPORTANT:** analyse the transcript FROM MEMORY (the data of step 2), NOT from the saved
 file — it may be too large for the Read tool.
@@ -185,7 +212,7 @@ d) Related decisions and ADRs (if `qmd` is available):
 ### 4. Two-pass analysis
 
 The full algorithm (small and chunked transcripts, the structured extraction checklist) is in
-`references/two-pass-analysis.md`. Follow the quality rules there as well.
+`${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/two-pass-analysis.md`. Follow the quality rules there as well.
 
 ### 4.5. Final reconciliation of the prose against the `Договорённости` table
 
@@ -219,7 +246,7 @@ from the transcript (step 3); it checks the draft against itself.
 
 Use `save_location` from the parameters. If it is `archive_only` → do not create a protocol,
 only the transcript. Otherwise use the template and the fixed protocol sections:
-`references/protocol-template.md`. Links to participant profiles in the protocol follow
+`${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/protocol-template.md`. Links to participant profiles in the protocol follow
 `registry.directories.people` from step 0b; if the key is not declared, leave the participant
 as plain text with no wiki-link rather than guessing the directory.
 
@@ -308,27 +335,26 @@ and the row's status is not changed.
 ### 6. Hybrid update and the registry
 
 Automatic and confirmation-requiring updates, and the `ktalk mark-done` / `mark-partial`
-commands: `references/vault-update-and-report.md`.
+commands: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/vault-update-and-report.md`.
 
 ### 7. Final report
 
-The format: `references/vault-update-and-report.md`.
+The format: `${CLAUDE_PLUGIN_ROOT}/references/ktalk-processor/vault-update-and-report.md`.
 
-## Final step — delegating to project-curator
+## Final step — reporting affected projects
 
-If the meeting touched one or more projects from the `registry.directories.projects_active`
-directory (step 0b) — and if the key is not declared, skip the delegation and mark that
-explicitly in the report:
+This agent does not act on project cards itself and does not attempt to reach any other agent
+directly — cross-project consolidation is the orchestrator's job, not a leaf agent's (`tools:`
+above is a closed list; it stays closed). Your entire responsibility here is to name what you
+touched and stop:
 
-1. Determine the list of affected projects (ids)
-2. Assemble the payload: `affected_project_ids`, `meeting_date`, `meeting_id` (a link to the
-   transcript file), `key_decisions`, `new_risks`, `action_items_for_projects`
-3. Call the `project-curator` agent with the task:
-   ```
-   обнови карточки проектов {ids} с учётом встречи {meeting_date} — ключевые решения, риски,
-   action items. Проверь консистентность команды и статуса.
-   ```
-4. Add a line to the final report: `Делегировано project-curator: {ids}`
+1. Determine the list of affected projects (ids) from the
+   `registry.directories.projects_active` directory (step 0b) — if the key is not declared,
+   note that explicitly in the report and treat the project list as empty.
+2. Add a line to the final report: `Проекты затронуты: {ids}` when the list is non-empty, or
+   `Проекты затронуты: нет` otherwise.
 
-If the meeting did NOT touch any projects, or `project-curator` is not installed in the host
-project, skip the delegation step and note that in the report.
+That is the whole step. The orchestrator (`skills/ktalk-registry/SKILL.md`, step 5.5) collects
+this line from every agent it launched in the same run, unions the ids across all of them, and
+decides on its own what to do with the union — including whether the agent that would act on
+it is available at all. Nothing about that decision is this agent's concern.

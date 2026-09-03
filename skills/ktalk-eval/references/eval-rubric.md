@@ -92,7 +92,7 @@ Does the output follow the expected protocol template?
 | 2 | Several structural deviations from the template. |
 | 1 | The protocol does not follow the expected schema at all. |
 
-**Method:** a checklist against the template in `agents/references/protocol-template.md`:
+**Method:** a checklist against the template in `references/ktalk-processor/protocol-template.md`:
 
 - [ ] Frontmatter: type, subtype, recording_id, title, date, duration_min, participants,
       source, transcript, decisions_count, commitments_count, unclear_count
@@ -108,7 +108,7 @@ Does the output follow the expected protocol template?
       meeting type it is absent **entirely** (not an empty section with a heading and no
       content)
 - [ ] The uncertain-name marker is exactly `[ASR?]` (the form is fixed by
-      `agents/references/protocol-template.md`; it is not invented on the spot by the
+      `references/ktalk-processor/protocol-template.md`; it is not invented on the spot by the
       evaluator or by the authoring model); a single form throughout the document, including
       repeated mentions of the same name (FR-42 AC4 — consistency within the document)
 - [ ] `[ASR?]` is **not** counted in the frontmatter `unclear_count` — that counter counts

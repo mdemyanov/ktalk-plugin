@@ -7,7 +7,7 @@
 # `Audience` — все четыре объявлены.
 code: ktalk-plugin
 title: Документарный контур плагина ktalk
-description: Решения, требования, архитектура и уроки плагина ktalk (обёртка над ktalk-mcp)
+description: Решения, требования, архитектура и уроки плагина ktalk (обёртка над отдельно устанавливаемым CLI-пакетом)
 style: blue-green
 language: ru
 supportedLanguages:

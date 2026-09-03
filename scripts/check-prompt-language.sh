@@ -63,12 +63,12 @@ TRIGGERS = {
 # FR-3 class 2 — text that lands in the host's vault. Losing or rewording any of these is a
 # defect, not an improvement (spec: "Verbatim Russian is preserved byte-for-byte").
 VERBATIM = {
-    "agents/references/protocol-template.md": [
+    "references/ktalk-processor/protocol-template.md": [
         "## Участники", "## Ключевые решения", "## Договорённости",
         "| # | Решение | Кто принял | Таймкод | Confidence |"],
     "agents/ktalk-processor.md": [
         "✅ выполнено", "❌ снято", "🔄 в работе", "ДД.ММ.ГГГГ", "ГГГГ-ММ-ДД", "вне области"],
-    "agents/references/vault-update-and-report.md": ["📝 Открытые договорённости"],
+    "references/ktalk-processor/vault-update-and-report.md": ["📝 Открытые договорённости"],
 }
 
 def split_front_matter(text):

@@ -614,7 +614,16 @@ check_eq 1 $? "ktalk-processor.md: контракт описан как «тот
 # `compat.json`, ADR-024), поэтому снимок перебазирован на состояние ПОСЛЕ неё.
 # С этого момента он охраняет уже другое утверждение: промт-слой не называет
 # конкретный пакет и не дрейфует без подъёма версии (NFR-25).
-EXPECTED_PROMPT_LAYER_SHA256="6b62dee0bd33ccd8f8b643270f1b3f5b8a0e1e09798a82bf630028c156d10fb3"
+#
+# ПЕРЕБАЗИРОВКА 2026-09-03 (плагин 1.10.0, DEV-001, ktalk-plugin-ke5.12).
+# release-delivery-tails (ADR-025 Д5, ADR-026): agents/references/*.md
+# покинули agents/ (снимок это видит — файлы физически ушли из-под find
+# agents), восемь ссылок agents/ktalk-processor.md обновлены, шаг 2b
+# (проверка личности транскрипта) и «Final step» (Проекты затронуты: вместо
+# вызова project-curator) переписаны, skills/ktalk-registry/SKILL.md получил
+# шаг 5.5. Minor-версия поднята тем же коммитом (NFR-25) — снимок
+# перебазирован синхронно, не отдельным раундом.
+EXPECTED_PROMPT_LAYER_SHA256="985865d4dafb08c412f9805b95d1e71fce11230efdabcbe422815f3eb0386978"
 ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
 check_eq "$EXPECTED_PROMPT_LAYER_SHA256" "$ACTUAL_PROMPT_LAYER_SHA256" \
   "AC-1: содержимое skills/+agents/+commands/ не изменилось со снимка (перебазирован на 1.9.0) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"

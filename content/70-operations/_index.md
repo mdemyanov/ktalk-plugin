@@ -13,6 +13,10 @@ Runbook, деплой, мониторинг, откат.
 - [2026-08-31-package-rename-transition-release-runbook.md](2026-08-31-package-rename-transition-release-runbook.md) —
   переход `ktalk-mcp` → `ktalk-cli`: три публикации в строгом порядке, гейт перед релизом
   плагина, откат по идентичности пакета (не только по версии), санкция публикации
+- [2026-09-03-release-delivery-tails-release-runbook.md](2026-09-03-release-delivery-tails-release-runbook.md) —
+  релиз 1.10.0: тег `claude plugin tag` вместо `git tag`, пред-релизный гейт GO-критериев
+  `check.sh --full`, границы оркестратора/обработчика (`project-curator`), перенос issue
+  `#5`/`#7` в трекер пакета, закрытие `#6`
 
 ## Правила
 
