@@ -26,6 +26,11 @@ title: ADR
 - [ADR-026-orchestrator-processor-boundary.md](ADR-026-orchestrator-processor-boundary.md) —
   граница оркестратора и обработчика: кто вызывает `project-curator`, что обработчик
   возвращает отчётом, проверка личности транскрипта перед анализом (issue #5, #6)
+- [ADR-027-github-mirror-channel.md](ADR-027-github-mirror-channel.md) —
+  второй канал поставки, публичное GitHub-зеркало payload: имя маркетплейса зеркала, процесс
+  одностороннего зеркалирования, документация обоих каналов, scoped-проверка внутреннего
+  домена, подтверждение источника истины для issue/PR, команды сверки паритета (extends in
+  part ADR-025)
 
 ## Правила
 
