@@ -50,8 +50,9 @@ ADR-027 решает шесть вопросов второго канала п�
 Релиз → `claude plugin tag` (ADR-025 Д1) создаёт тег `ktalk--vX.Y.Z` на GitLab → тег запускает
 `mirror-github` → джоб читает `.gitlab/payload-manifest.txt`, копирует перечисленные пути тега
 во временное дерево, патчит `.claude-plugin/marketplace.json.name`, коммитит, пушит тот же тег
-на `github.com/mdemyanov/ktalk-plugin` → DevOps прогоняет три команды Д6 → расхождение — дефект
-зеркалирования, разбирается вручную, повторный `Retry` джоба.
+на `github.com/mdemyanov/ktalk-plugin` → DevOps проверяет резолвимость обоих ref'ов и прогоняет
+три команды Д6 → расхождение — дефект зеркалирования, разбирается вручную, повторный `Retry`
+джоба.
 
 ## Payload-манифест (`.gitlab/payload-manifest.txt`)
 
@@ -84,7 +85,7 @@ LICENSE
 | Requirement / Scenario (`openspec/specs/dual-channel-delivery/spec.md`) | Д | Как удовлетворяется |
 |---|---|---|
 | The two channels declare distinguishable marketplace identities — Scenario: A consumer adds both channels' marketplaces | Д1 | `name: "ktalk-plugins-mirror"` на зеркале, правится механически при зеркалировании |
-| Cross-channel parity is a checkable fact, not a claim — Scenario: Comparing a mirrored release against its source | Д6 | три буквальные команды `diff`/`git ls-tree`, DevOps-рансбук |
+| Cross-channel parity is a checkable fact, not a claim — Scenario: Comparing a mirrored release against its source | Д6 | guard резолвимости ref'ов + три буквальные команды `diff`/`git ls-tree`, DevOps-рансбук |
 | Documentation names each channel and how to tell them apart — Scenario: An operator reads the installation instructions | Д3 | README, два подраздела с разными командами и статусом (источник истины/зеркало) |
 | A consumer can tell "mirror lags" from "version does not exist" — Scenario: A version was released internally but not yet mirrored | Д2 | тег на GitHub создаётся только при успешном push — список тегов зеркала структурно не опережает реально смирроренное |
 | The public payload carries no internal infrastructure literal — Scenario: The composition gate scans for the internal domain | Д4 | scoped-проверка по payload-манифесту, не по всему дереву |
@@ -135,9 +136,11 @@ delivery/spec.md`.
 - Рансбук релиза: после `claude plugin tag` и обычного релизного процесса — дождаться
   `mirror-github` в пайплайне; при красном джобе — не трогать релиз GitLab, разобрать причину,
   `Retry` вручную.
-- Рансбук паритета (после каждого успешного зеркалирования) — три команды Д6 ADR-027, буквально
-  (раздел «Decision, Д6» ADR-027); непустой вывод любой — дефект зеркалирования, не публикуется
-  как «версия для другой аудитории».
+- Рансбук паритета (после каждого успешного зеркалирования) — guard резолвимости обоих ref'ов,
+  затем три команды Д6 ADR-027, буквально (раздел «Decision, Д6» ADR-027); guard не пройден —
+  тег не резолвится, сверка не проводилась, это не паритет; guard пройден и непустой вывод
+  любой из трёх команд — дефект зеркалирования, не публикуется как «версия для другой
+  аудитории».
 - Мониторинг: новый сигнал — статус джоба `mirror-github` в пайплайне GitLab (нативный UI, без
   нового канала алертинга); нет нового сетевого сервиса, кроме исходящего `git push` на GitHub.
 
