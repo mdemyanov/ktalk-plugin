@@ -153,9 +153,17 @@ fi
     commit -q -m "mirror: $TAG"
   git tag "$TAG"
   git remote add origin "$REMOTE_URL"
-  git -c http.extraHeader="Authorization: Bearer ${GITHUB_MIRROR_TOKEN}" \
+  # Схема авторизации — Basic, не Bearer. Проверено вживую 2026-09-04 на первой
+  # публикации: `Authorization: Bearer <gho_…>` даёт `remote: invalid credentials`
+  # / `fatal: Authentication failed`. Bearer принимается GitHub'ом для installation-
+  # токена GitHub App, но не для классического OAuth/PAT в git-over-HTTPS — там
+  # обязателен Basic с токеном в позиции пароля. Имя пользователя игнорируется,
+  # `x-access-token` — конвенция самого GitHub. `tr -d` снимает перенос строки,
+  # который base64 добавляет на длинном входе: заголовок с \n отвергается.
+  auth_basic="$(printf 'x-access-token:%s' "${GITHUB_MIRROR_TOKEN}" | base64 | tr -d '\n')"
+  git -c http.extraHeader="Authorization: Basic ${auth_basic}" \
     push origin "$TAG"
-  git -c http.extraHeader="Authorization: Bearer ${GITHUB_MIRROR_TOKEN}" \
+  git -c http.extraHeader="Authorization: Basic ${auth_basic}" \
     push --force origin "mirror-tmp:main"
 )
 echo "OK: $TAG запушен на $REMOTE_URL"
