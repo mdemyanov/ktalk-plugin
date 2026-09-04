@@ -65,7 +65,15 @@ SOURCE_MKT="$ROOT/.claude-plugin/marketplace.json"
 GITLAB_CI="$ROOT/.gitlab-ci.yml"
 PAYLOAD_MANIFEST="$ROOT/.gitlab/payload-manifest.txt"
 COMPOSITION_SH="$ROOT/scripts/check-plugin-composition.sh"
+ADR_027="$ROOT/content/00-project/adr/ADR-027-github-mirror-channel.md"
 EXPECTED_MIRROR_NAME="ktalk-plugins-mirror"   # Д1 ADR-027 — литерал решён SA, не деталь Dev
+
+# Раздел «Decision, Д6» ADR-027 несёт guard резолвимости обоих ref'ов буквальной командой
+# (инлайн-код в прозе) ПЕРЕД тремя командами сравнения. AC2-6 читает и исполняет ЭТУ команду —
+# тот же приём извлечения, что AC1-1 применяет к jq-фильтру .gitlab-ci.yml — вместо того чтобы
+# держать в теле теста собственную незащищённую копию (что ловит AC2-6 гарантированно красным
+# независимо от того, что решил SA/Dev).
+GUARD_LINE="$(grep -oE 'for ref in gitlab/<tag> github/<tag>;.*done' "$ADR_027" 2>/dev/null | head -1)"
 
 echo "###############################################################################"
 echo "# AC-1 — Requirement: The two channels declare distinguishable marketplace identities"
@@ -144,6 +152,8 @@ fi
 # вида `echo "D=[$val]"` и последующий grep/sed ломается, если $val сам многострочный (обычный
 # случай для diff), поэтому передача через файлы, не через маркеры в stdout.
 MISTYPED_TAG="v1.2.O"
+GUARD_CMD_OK="${GUARD_LINE//<tag>/v9.9.9}"
+GUARD_CMD_TYPO="${GUARD_LINE//<tag>/$MISTYPED_TAG}"
 TMP2="$(mktemp -d)"
 (
   cd "$TMP2"
@@ -177,6 +187,13 @@ TMP2="$(mktemp -d)"
   # Назад на ветку с полным деревом источника — иначе `cat .gitlab/payload-manifest.txt`
   # (команда №3 ниже) читает рабочую копию orphan-ветки mirror-ok, где .gitlab/ не существует.
   git checkout -q gitlab-mainline
+
+  # Guard Д6 (буквально извлечён из ADR-027 выше) на паритетной фикстуре — оба ref'а
+  # резолвятся, поэтому guard обязан пройти МОЛЧА (код 0, пустой вывод): это отличает «guard
+  # проверяет резолвимость» от «guard всегда отказывает» (AC2-6c ниже).
+  if [[ -n "$GUARD_CMD_OK" ]]; then
+    bash -c "$GUARD_CMD_OK" > "$TMP2/guard_ok.txt" 2>&1; echo $? > "$TMP2/guard_ok.rc"
+  fi
 
   # --- Случай 1 (happy path): три команды Д6 буквально, на паритетной фикстуре ---
   diff <(git show gitlab/v9.9.9:.claude-plugin/plugin.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])") \
@@ -212,22 +229,24 @@ TMP2="$(mktemp -d)"
        <(git show github/v1.2.0:.claude-plugin/plugin.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])") \
        > "$TMP2/d1_bad.txt" 2>&1 || true
 
-  # --- Malformed input (обязательный класс): DevOps опечатался в имени тега (латинская O
-  # вместо нуля). Известный риск ЛИТЕРАЛЬНЫХ команд Д6: обе ветки `git show <ref>:...` внутри
-  # process substitution падают на неразрешимом ref'е, каждая печатает ПУСТОЙ stdout — diff
-  # двух пустых строк тоже пуст, то есть ошибка обращения к тегу МАСКИРУЕТСЯ под «паритет
-  # подтверждён». Тест документирует и подтверждает этот риск: он не устраним правкой Dev
-  # (команды зафиксированы Д6 ADR-027 буквально) — носитель: рансбук DevOps (проверка
-  # `git rev-parse --verify` ДО diff), не код Dev. См. at-design.md, Error cases → masked failure.
-  diff <(git show "gitlab/$MISTYPED_TAG":.claude-plugin/plugin.json 2>/dev/null) \
-       <(git show "github/$MISTYPED_TAG":.claude-plugin/plugin.json 2>/dev/null) \
-       > "$TMP2/d1_typo.txt" 2>&1 || true
+  # Malformed input (обязательный класс): DevOps опечатался в имени тега (латинская O вместо
+  # нуля). Без guard'а `git show <ref>:...` внутри process substitution на неразрешимом ref'е
+  # печатает ПУСТОЙ stdout с обеих сторон — diff двух пустых строк тоже пуст, ошибка обращения
+  # к тегу МАСКИРУЕТСЯ под «паритет подтверждён». Guard Д6 (буквально извлечён из ADR-027 выше,
+  # не переписан тестом) обязан перехватить это ДО diff — исполняем сам guard на опечатанном
+  # теге и проверяем ЕГО код возврата и вывод (AC2-6b ниже), не диктуем тесту готовый ответ.
+  if [[ -n "$GUARD_CMD_TYPO" ]]; then
+    bash -c "$GUARD_CMD_TYPO" > "$TMP2/guard_typo.txt" 2>&1; echo $? > "$TMP2/guard_typo.rc"
+  fi
 )
 D1="$(cat "$TMP2/d1.txt" 2>/dev/null || true)"
 D2="$(cat "$TMP2/d2.txt" 2>/dev/null || true)"
 D3="$(cat "$TMP2/d3.txt" 2>/dev/null || true)"
 D1_BAD="$(cat "$TMP2/d1_bad.txt" 2>/dev/null || true)"
-D1_TYPO="$(cat "$TMP2/d1_typo.txt" 2>/dev/null || true)"
+GUARD_OK_OUT="$(cat "$TMP2/guard_ok.txt" 2>/dev/null || true)"
+GUARD_OK_RC="$(cat "$TMP2/guard_ok.rc" 2>/dev/null || true)"
+GUARD_TYPO_OUT="$(cat "$TMP2/guard_typo.txt" 2>/dev/null || true)"
+GUARD_TYPO_RC="$(cat "$TMP2/guard_typo.rc" 2>/dev/null || true)"
 
 require_true "AC2-2" "команда №1 Д6 (версия плагина) на паритетной фикстуре даёт пустой diff" \
   "$([[ -z "$D1" ]] && echo 0 || echo 1)" "diff: $D1"
@@ -237,10 +256,23 @@ require_true "AC2-4" "команда №3 Д6 (состав payload) на пар
   "$([[ -z "$D3" ]] && echo 0 || echo 1)" "diff: $D3"
 require_true "AC2-5 (boundary — дефект зеркалирования)" "команда №1 обнаруживает разную версию под одним тегом (не молчаливый паритет)" \
   "$([[ -n "$D1_BAD" ]] && echo 0 || echo 1)" "diff пуст, хотя версии разные: 1.2.0 vs 1.1.0"
-require_true "AC2-6 (malformed input — известный риск литеральных команд Д6)" \
-  "опечатанный тег НЕ маскируется под пустой (паритетный) diff" \
-  "$([[ -n "$D1_TYPO" ]] && echo 0 || echo 1)" \
-  "diff пуст при заведомо неразрешимом теге '$MISTYPED_TAG' — команда Д6 читает это как «паритет», не как ошибку обращения к тегу"
+
+if [[ -z "$GUARD_LINE" ]]; then
+  bad "AC2-6a (malformed input guard)" "раздел «Decision, Д6» ADR-027 несёт guard резолвимости обоих ref'ов (буквальная команда for.../git rev-parse --verify) перед тремя признаками паритета" \
+      "команда не найдена в $ADR_027 (файл ADR отсутствует либо переписан вне этой формы) — исполнить документированную процедуру нечем"
+  skip_ac "AC2-6b (malformed input)" "guard не извлечён из ADR-027 — поведение на опечатанном теге не проверить"
+  skip_ac "AC2-6c (регресс-guard метода)" "guard не извлечён из ADR-027 — поведение на резолвимой паре ref'ов не проверить"
+else
+  ok "AC2-6a (malformed input guard)" "раздел «Decision, Д6» ADR-027 несёт guard резолвимости обоих ref'ов буквальной командой: $GUARD_LINE"
+  require_true "AC2-6b (malformed input)" \
+    "guard Д6, извлечённый из ADR-027 и исполненный буквально на опечатанном теге '$MISTYPED_TAG', завершается ненулевым кодом и печатает отказ — не пустой diff, не тихий проход" \
+    "$([[ "${GUARD_TYPO_RC:-1}" != "0" && -n "$GUARD_TYPO_OUT" ]] && echo 0 || echo 1)" \
+    "rc='${GUARD_TYPO_RC:-<файл rc отсутствует>}' output='${GUARD_TYPO_OUT:-<пусто>}'"
+  require_true "AC2-6c (регресс-guard метода)" \
+    "тот же guard на резолвимой паре ref'ов (v9.9.9) проходит молча (код 0, пустой вывод) — отличает «guard проверяет резолвимость» от «guard всегда отказывает»" \
+    "$([[ "${GUARD_OK_RC:-1}" == "0" && -z "$GUARD_OK_OUT" ]] && echo 0 || echo 1)" \
+    "rc='${GUARD_OK_RC:-<файл rc отсутствует>}' output='${GUARD_OK_OUT:-<пусто>}'"
+fi
 rm -rf "$TMP2"
 
 echo
