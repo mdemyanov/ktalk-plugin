@@ -64,6 +64,58 @@ check "секрет со значением" 'KTALK_(SESSION_TOKEN|PERSONAL_API_
 # Внутренний домен хозяина.
 check "внутренний домен ktalk.ru" 'ktalk\.ru'
 
+# ADR-027 Д4 (capability `dual-channel-delivery`): второй внутренний домен — GitLab
+# самого проекта, не строка 65 (та про домен продукта ktalk.ru и сканирует весь `.`).
+# НЕ обобщение строки 65 в тот же паттерн: whole-tree немедленно поймала бы прозу,
+# описывающую этот же домен (content/, ADR, требования) — content/lessons-learned.md,
+# записи SA 2026-08-31 и 2026-09-04 о том, как ровно эта ловушка уже дважды срабатывала
+# в этом эпике. Вместо этого — scoped-скан: только пути из
+# .gitlab/payload-manifest.txt (то, что реально уходит в публикацию), не всё дерево.
+# Домен собран из двух частей на лету, тем же приёмом, каким test-dual-channel-delivery.sh
+# избегает записи запрещённого литерала контигуально на диск.
+check_payload_domain() {
+    # Скрипт уже cd'нулся в корень дерева (см. верх файла) — манифест и пути из него
+    # читаются относительно текущей рабочей директории.
+    local manifest=".gitlab/payload-manifest.txt"
+    local part1="doc-hub.gitlab"
+    local part2="yandexcloud.net"
+    local pattern="${part1}\\.${part2}"
+
+    if [ ! -s "$manifest" ]; then
+        echo "WARN: payload-манифест ($manifest) не найден или пуст — scoped-проверка внутреннего домена GitLab по payload НЕ выполнена (не тихий пропуск — см. Integration points, ADR-027 companion)"
+        return 0
+    fi
+
+    local paths=()
+    local line
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        case "$line" in
+            /*|*..*)
+                echo "WARN: путь '$line' в манифесте $manifest пропущен из scoped-проверки — абсолютный путь или обход каталога (..) не допускается"
+                continue
+                ;;
+        esac
+        [ -e "$line" ] && paths+=("$line")
+    done < "$manifest"
+
+    if [ "${#paths[@]}" -eq 0 ]; then
+        echo "WARN: ни один путь из манифеста $manifest не найден в дереве — scoped-проверка внутреннего домена GitLab НЕ выполнена"
+        return 0
+    fi
+
+    local hits
+    if hits=$(grep -rnE "$pattern" \
+        --exclude-dir=.git \
+        --exclude=check-plugin-composition.sh \
+        "${paths[@]}" 2>/dev/null); then
+        echo "FAIL: внутренний домен GitLab найден в файле из публичного payload-манифеста ($manifest)"
+        echo "$hits"
+        fail=1
+    fi
+}
+check_payload_domain
+
 # MCP-имена операций встреч — промт-поверхность обязана называть только CLI-команды
 # (ADR-012 §2а, ADR-015 «Решение» п.1: MCP заморожен для этой поверхности, FR-32…FR-36).
 check "MCP-имя операции встреч вместо CLI" \

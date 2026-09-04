@@ -1,0 +1,24 @@
+# ADR-027 Д2 (капабилити dual-channel-delivery) + уточнение PM поверх брифа SA
+# (ktalk-plugin-dhg.11, п.5): джоб-тело живёт в scripts/mirror-github.sh, проверяемо без
+# GitLab CI раннера — .gitlab-ci.yml здесь только вызывает его по тегу релиза. В дереве
+# сегодня не было ни одного CI-файла до этой правки (find . -iname "*.gitlab-ci*" был
+# пуст) — наличие раннера GitLab CI этим не проверяется и не предполагается.
+#
+# Шаг патча marketplace.json (для документации/discoverability; фактическая логика — в
+# scripts/mirror-github.sh, единственный источник этой команды):
+#   jq '.name = "ktalk-plugins-mirror"'
+
+stages:
+  - mirror
+
+mirror-github:
+  stage: mirror
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^ktalk--v/'
+  script:
+    - bash scripts/mirror-github.sh --tag "$CI_COMMIT_TAG" --push
+  # GITHUB_MIRROR_TOKEN — protected/masked переменная CI/CD (только защищённые теги,
+  # область — запись в mdemyanov/ktalk-plugin на GitHub, не шире). Провизионирование —
+  # DevOps (Brief for DevOps, content/40-architecture/2026-09-04-dual-channel-delivery.md).
+  # При сбое джоб завершается ненулевым кодом; GitLab-пайплайн — красный штатным
+  # способом; релиз GitLab не откатывается; повтор — вручную (Retry), не автоциклом.

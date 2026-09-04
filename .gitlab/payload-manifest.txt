@@ -1,0 +1,9 @@
+.claude-plugin/
+agents/
+commands/
+skills/
+references/
+scripts/
+README.md
+LICENSE
+.github/
