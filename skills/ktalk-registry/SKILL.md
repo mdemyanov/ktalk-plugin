@@ -50,7 +50,9 @@ The analysis-quality instructions: `references/analysis-quality.md`
 - **The `ktalk` CLI** — deterministic mechanics and content reading (recordings, transcripts,
   summaries). Every command supports `--json` (valid JSON on stdout; errors on stderr with a
   non-zero exit code). This is the sole call channel from this skill to the circuit —
-  the plugin declares no MCP server (ADR-022 D1).
+  the plugin declares no MCP server (ADR-022 D1). **One exception:** `get-transcript` (only
+  this command) returns exit code `3` for a fully printed, complete response whose independent
+  identity check did not confirm the speakers — not a call failure. See the table row below.
 - **The markdown mirror of the registry** — generated and read-only (`ktalk export`), at a
   path inside the host project. **Never edit it by hand and never parse it as a source.**
 
@@ -278,7 +280,7 @@ ktalk export
 | `ktalk set-vault-id <id> <ktalk_id> <vault_id>` | Bind a profile to a participant |
 | `ktalk export` | Regenerate the markdown mirror of the registry |
 | `ktalk-processor` agent | Process a recording (transcript + profile/project updates) |
-| `ktalk get-transcript <id> --json` | The transcript by pages (`--chunk`, `--chunk-size`); since 2.0.0 always wrapped in a `transcript`/`identity_check` envelope, identity check on by default (`--no-verify-identity` to disable) |
+| `ktalk get-transcript <id> --json` | The transcript by pages (`--chunk`, `--chunk-size`); since 2.0.0 always wrapped in a `transcript`/`identity_check` envelope, identity check on by default (`--no-verify-identity` to disable). Since 2.1.0, exit code `3` means the envelope printed above is complete and `identity_check.result == "mismatch"` — not a failed call; read `.transcript` as usual (`ktalk-processor.md` step 2b runs its own separate check regardless of this field) |
 | `ktalk get-summary <id> --json` | The meeting's summary and protocol |
 | `references/registry-format.md` | The data model: SQLite + CLI |
 | `references/analysis-quality.md` | The analysis-quality instructions for the agent |

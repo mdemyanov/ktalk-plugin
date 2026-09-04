@@ -22,6 +22,10 @@ title: Реализация
 - [2026-09-04-cli-2-0-0-contract-sync.md](2026-09-04-cli-2-0-0-contract-sync.md) —
   синхронизация промт-слоя с ломающим изменением `ktalk-cli` 2.0.0 (конверт
   `transcript`/`identity_check` у `get-transcript`), minor-версия 1.11.0 → 1.12.0
+- [2026-09-04-cli-2-1-0-exit-code-3.md](2026-09-04-cli-2-1-0-exit-code-3.md) — код возврата `3`
+  у `get-transcript` (сверка идентичности не сошлась, тело ответа полно) в `ktalk-cli` 2.1.0
+  (DEV-002, ktalk-plugin-dhg.21); minor-версия плагина НЕ поднята — конфликт с NFR-25, не решён
+  исполнителем
 
 ## Правила
 
