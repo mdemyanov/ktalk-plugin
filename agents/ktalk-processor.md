@@ -134,11 +134,18 @@ ktalk get-transcript {recording_id} --chunk 0 --json
 ```
 
 The chunking contract (chunk=0 means auto). With `--json` — the call above, always — the
-response is the `ktalk-cli` 2.0.0 envelope in EVERY case, small transcript or large:
+response is the `ktalk-cli` 2.1.0 envelope in EVERY case, small transcript or large:
 `{"transcript": {...}, "identity_check": {"result", ...}}` — read everything from `.transcript`,
 never from the JSON's top level. The envelope's `identity_check` (`match` / `mismatch` /
 `inconclusive` / `not_checked`, the CLI's own check, on by default) is informational only here
 — step 2b below is the plugin's own check and does not read `identity_check`.
+
+The command's exit code follows the same split: since 2.1.0, `get-transcript --json` (only this
+command) returns `3` exactly when `identity_check.result == "mismatch"` — the `.transcript` body
+above is still complete and printed in full; this is not a failed call. A `3` here is no reason
+to discard the output or retry as though the network call itself failed — parse `.transcript` as
+usual. What happens next is governed entirely by step 2b's own check below, exactly as it
+already ignores the `identity_check` field: this exit code changes nothing about that logic.
 
 `.transcript` itself takes one of two shapes — told apart by which keys it carries, not by
 size, and neither is ready-made prose:

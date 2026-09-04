@@ -37,7 +37,9 @@ WAL + `busy_timeout=5000` + one transaction per operation → concurrent backgro
 ## The `ktalk` CLI surface
 
 Every command supports `--json` (valid JSON on stdout; errors go to stderr with a non-zero
-exit code).
+exit code). **One exception:** `get-transcript` (only this command) uses exit code `3` for a
+fully printed, complete response whose independent identity check did not confirm the
+speakers — see the table row below, this is not a call failure.
 
 | Command | Purpose |
 |---|---|
@@ -53,7 +55,7 @@ exit code).
 | `ktalk set-vault-id <id> <ktalk_id> <vault_id>` | Bind a profile to a participant. |
 | `ktalk export [--out PATH] [--full]` | Regenerate the markdown mirror. |
 | `ktalk migrate <vault> [--dry-run]` | One-off import from the old markdown registries. |
-| `ktalk get-transcript <id> [--chunk N] [--chunk-size N] [--no-verify-identity]` | A recording's transcript (content reading); with `--json` since 2.0.0 the response is always a `transcript`/`identity_check` envelope, identity check on by default. |
+| `ktalk get-transcript <id> [--chunk N] [--chunk-size N] [--no-verify-identity]` | A recording's transcript (content reading); with `--json` since 2.0.0 the response is always a `transcript`/`identity_check` envelope, identity check on by default. Since 2.1.0, exit code `3` marks `identity_check.result == "mismatch"` on an otherwise complete response — read `.transcript` as usual, the exit code alone is not grounds to discard it. |
 | `ktalk get-summary <id>` | A recording's summary (content reading). |
 
 ## Deduplication and expiration (done by the CLI)
