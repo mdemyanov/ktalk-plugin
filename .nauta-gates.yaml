@@ -152,6 +152,14 @@ promptLayerSizeBudget:
 # check-prompt-language.sh. Заменяет собой не гейт целиком, а СПОСОБ, которым test-onboard.sh
 # (тест 46) защищал ту же строку Requirement: два строкоспецифичных grep → обобщённый
 # default-deny скан (см. заголовок скрипта и отчёт задачи DEV-102).
+#
+# test-dual-channel-delivery.sh (DEV-001, ktalk-plugin-dhg.11, QA-001 ktalk-plugin-dhg.19) —
+# full:, не fast:, тем же основанием, что test-release-delivery-tails.sh выше: живые
+# подпроцессы (несколько `git init`/`checkout`/`commit` в tmp-репозиториях, четыре живых
+# вызова scripts/check-plugin-composition.sh на rsync-копиях дерева для AC-5), замерено
+# ~6,5 с — на порядок дороже бюджета fast: (~0,5 с), но не self-referencing: изолированные
+# копии ($T5A..$T5D), не $ROOT, той же техникой, что AC-14e..h в test-release-delivery-
+# tails.sh (см. запись auto-memory о самоссылающейся сьюте в projectGates.full).
 projectGates:
   fast:
     - scripts/check-plugin-composition.sh
@@ -161,6 +169,7 @@ projectGates:
   full:
     - scripts/test-onboard.sh
     - scripts/test-release-delivery-tails.sh
+    - scripts/test-dual-channel-delivery.sh
 
 # branchDiscipline — объявленный, а не выводимый профиль (ADR-025 Д7). Репозиторий уже
 # живёт профилем single практически: одна ветка роли на рабочую копию

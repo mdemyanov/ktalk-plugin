@@ -28,6 +28,9 @@ title: Архитектура
 - [2026-09-03-release-delivery-tails-at-design.md](2026-09-03-release-delivery-tails-at-design.md) —
   тест-дизайн QA-001: 16 сценариев (AC-1…AC-16) хвостов релиза 1.9.0, стаб
   `scripts/test-release-delivery-tails.sh`
+- [2026-09-04-dual-channel-delivery.md](2026-09-04-dual-channel-delivery.md) — второй канал
+  поставки: манифест публичного payload, зеркалирование по тегу, scoped-проверка внутреннего
+  домена, companion к ADR-027
 
 ## Правила
 

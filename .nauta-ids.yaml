@@ -38,7 +38,7 @@ namespaces:
     scope: namespace
     allocation: allocated
     populated: true
-    highwater: 26
+    highwater: 27
     # Кладбище отменённых номеров — индекс раздела ADR (`- ADR-007 — отменён, …`).
     # Проверка невозврата читает его только когда в `home` есть хотя бы одно определение,
     # то есть ровно тогда, когда `_index.md` уже обязан существовать.
