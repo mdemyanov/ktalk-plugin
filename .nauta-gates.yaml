@@ -160,6 +160,13 @@ promptLayerSizeBudget:
 # ~6,5 с — на порядок дороже бюджета fast: (~0,5 с), но не self-referencing: изолированные
 # копии ($T5A..$T5D), не $ROOT, той же техникой, что AC-14e..h в test-release-delivery-
 # tails.sh (см. запись auto-memory о самоссылающейся сьюте в projectGates.full).
+#
+# test-session-only-auth.sh (DEV-003, ktalk-plugin-6sm, SEC-001 Находка 2) — full:, не fast::
+# тот же класс, что test-dual-channel-delivery.sh выше — GUARD-блок копирует дерево в
+# mktemp -d (без .git) и живыми вызовами scripts/check-plugin-composition.sh (GUARD-1..6)
+# проверяет сам сторож Д5 ADR-028, замерено ~7,4 с — на порядок дороже бюджета fast: (~0,5 с).
+# Не self-referencing: живые вызовы бьют по check-plugin-composition.sh, не по check.sh, и
+# только на изолированной копии ($GUARD_MIRROR), не на $ROOT — рекурсии через projectGates нет.
 projectGates:
   fast:
     - scripts/check-plugin-composition.sh
@@ -170,6 +177,7 @@ projectGates:
     - scripts/test-onboard.sh
     - scripts/test-release-delivery-tails.sh
     - scripts/test-dual-channel-delivery.sh
+    - scripts/test-session-only-auth.sh
 
 # branchDiscipline — объявленный, а не выводимый профиль (ADR-025 Д7). Репозиторий уже
 # живёт профилем single практически: одна ветка роли на рабочую копию
