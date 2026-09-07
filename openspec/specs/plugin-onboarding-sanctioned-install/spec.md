@@ -13,6 +13,14 @@ mismatch in either direction is incompatible, and the remedy command names the p
 not a bare package name. Every scenario below that mentions "the remedy command" or "a
 compatible version" relies on that Requirement rather than restating it.
 
+Nor does it own which authorisation mode the onboarding instruction names, where it says the
+value may be held, or which command it names to place it there — that content belongs to
+`session-only-auth`'s Requirements ("The prompt layer declares exactly one supported
+authorisation mode", "The instruction names the token file as a legitimate holder of the
+value", "The instruction names the actual command that writes the token file"; ADR-028). This
+capability's own authorisation Requirement below covers only that no secret value ever appears
+in what the plugin controls.
+
 ## Requirements
 
 ### Requirement: Absence of the CLI is detected before the first circuit operation
@@ -53,22 +61,18 @@ reading `PATH`/version for diagnosis and printing instructions. It SHALL show th
 
 ### Requirement: The authorisation instruction never carries a secret value
 
-The onboarding instruction names both supported authorisation modes
-(`KTALK_PERSONAL_API_KEY` → `X-Auth-Token`; `KTALK_SESSION_TOKEN` → `sessionToken`; the key wins
-when both are set), where to obtain a value in the Kontur Talk interface, and where it may be
-placed (a process environment variable, or the host project's configuration — never a file
-inside the plugin tree). It SHALL NOT write a token value to any file it controls, and SHALL NOT
-print a token value under any condition; it checks and reports only whether a variable is set.
-
-#### Scenario: Both modes and the priority rule are named
-
-- **WHEN** the plugin issues the authorisation instruction
-- **THEN** the text SHALL name both modes and state which one wins when both are set
+Which authorisation mode the onboarding instruction names, where it says the value may be held,
+and which command it names to place it there is governed by `session-only-auth` (ADR-028); this
+capability does not restate that content. What this capability owns is narrower: the
+instruction process itself SHALL NOT write a token value to any file it controls, and SHALL NOT
+print a token value under any condition — it checks and reports only whether the token file or
+an environment variable is set, never the value held.
 
 #### Scenario: No token value appears in what the plugin controls
 
 - **WHEN** any onboarding step is logged or its output inspected
-- **THEN** no token value SHALL appear in it — only the fact that a variable is or is not set
+- **THEN** no token value SHALL appear in it — only the fact that the token file or a variable
+  is or is not set
 
 ### Requirement: Automatic install and update each require their own explicit sanction
 
