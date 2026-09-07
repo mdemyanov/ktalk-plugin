@@ -346,6 +346,70 @@ assert_contains_re "AC11-3" "onboarding.md явно гарантирует не�
   "$(cat "$ONBOARDING")" 'never print|never.{0,20}ask.{0,20}token|Token values are never'
 
 echo "###############################################################################"
+echo "# GUARD — Д5 ADR-028: сторож check-plugin-composition.sh на литерал KTALK_PERSONAL_API_KEY"
+echo "# Проверяет сам механизм сторожа (не содержание дерева, как AC-1 выше): ловит литерал"
+echo "# внутри периметра и молчит вне периметра — на изолированной копии дерева, приём"
+echo "# scripts/test-onboard.sh (тесты 40/44a/44b, регресс check-plugin-composition.sh)."
+echo "###############################################################################"
+
+COMPOSITION_SH="$ROOT/scripts/check-plugin-composition.sh"
+GUARD_TMP="$(mktemp -d)"
+trap 'rm -rf "$GUARD_TMP"' EXIT
+GUARD_MIRROR="$GUARD_TMP/mirror"
+cp -r "$ROOT" "$GUARD_MIRROR"
+rm -rf "$GUARD_MIRROR/.git"
+
+# GUARD-1: копия дерева без правок — сторож зелёный (сегодня периметр уже чист, DEV-001).
+OUT_G0="$(cd "$GUARD_MIRROR" && bash scripts/check-plugin-composition.sh 2>&1)"; RC_G0=$?
+assert_true "GUARD-1" "сторож зелёный на непорченой копии дерева" \
+  "$([[ "$RC_G0" -eq 0 ]] && echo 0 || echo 1)" "код возврата $RC_G0:
+$OUT_G0"
+
+# GUARD-2: литерал внесён ВНУТРИ периметра (references/) — сторож обязан покраснеть и назвать файл.
+INJECT_FILE="$GUARD_MIRROR/references/onboarding.md"
+printf '\n<!-- guard-test literal: KTALK_PERSONAL_API_KEY -->\n' >> "$INJECT_FILE"
+OUT_G2="$(cd "$GUARD_MIRROR" && bash scripts/check-plugin-composition.sh 2>&1)"; RC_G2=$?
+assert_true "GUARD-2a" "сторож падает при литерале внутри периметра (references/)" \
+  "$([[ "$RC_G2" -ne 0 ]] && echo 0 || echo 1)" "код возврата $RC_G2 (ожидался ненулевой)"
+assert_contains_re "GUARD-2b" "сообщение сторожа называет файл-нарушитель" \
+  "$OUT_G2" 'references/onboarding\.md'
+
+# GUARD-3: литерал убран — сторож снова зелёный.
+sed -i.bak '/guard-test literal: KTALK_PERSONAL_API_KEY/d' "$INJECT_FILE" && rm -f "$INJECT_FILE.bak"
+OUT_G3="$(cd "$GUARD_MIRROR" && bash scripts/check-plugin-composition.sh 2>&1)"; RC_G3=$?
+assert_true "GUARD-3" "сторож снова зелёный после удаления литерала" \
+  "$([[ "$RC_G3" -eq 0 ]] && echo 0 || echo 1)" "код возврата $RC_G3:
+$OUT_G3"
+
+# GUARD-4: тот же литерал в scripts/ (вне периметра) — сторож обязан промолчать (диагностика
+# факта наличия переменной — легитимна, ADR-028 Д5).
+printf '\n# guard-test literal (вне периметра): KTALK_PERSONAL_API_KEY\n' >> "$GUARD_MIRROR/scripts/ktalk-onboard.sh"
+OUT_G4="$(cd "$GUARD_MIRROR" && bash scripts/check-plugin-composition.sh 2>&1)"; RC_G4=$?
+assert_true "GUARD-4" "сторож молчит про литерал в scripts/ (вне периметра Д5)" \
+  "$([[ "$RC_G4" -eq 0 ]] && echo 0 || echo 1)" "код возврата $RC_G4:
+$OUT_G4"
+
+# GUARD-5: тот же литерал в content/ (вне периметра) — сторож обязан промолчать (цитирование
+# факта о коде пакета легитимно, та же логика, что ADR-027 Д4 для внутреннего домена).
+mkdir -p "$GUARD_MIRROR/content/60-implementation"
+printf 'guard-test literal (вне периметра): KTALK_PERSONAL_API_KEY\n' >> "$GUARD_MIRROR/content/60-implementation/guard-test-scratch.md"
+OUT_G5="$(cd "$GUARD_MIRROR" && bash scripts/check-plugin-composition.sh 2>&1)"; RC_G5=$?
+assert_true "GUARD-5" "сторож молчит про литерал в content/ (вне периметра Д5)" \
+  "$([[ "$RC_G5" -eq 0 ]] && echo 0 || echo 1)" "код возврата $RC_G5:
+$OUT_G5"
+
+# GUARD-6 (masked failure — сторож не ловит сам стаб AC-1): scripts/test-session-only-auth.sh
+# (этот файл) сам называет литерал буквально (строка стаба AC1-1 выше) — сторож не должен
+# споткнуться об собственную проверку.
+OUT_G6="$(cd "$GUARD_MIRROR" && bash scripts/check-plugin-composition.sh 2>&1)"; RC_G6=$?
+assert_true "GUARD-6 (masked failure)" "сторож не ловит литерал в scripts/test-session-only-auth.sh (сам стаб AC-1)" \
+  "$([[ "$RC_G6" -eq 0 ]] && echo 0 || echo 1)" "код возврата $RC_G6:
+$OUT_G6"
+
+rm -rf "$GUARD_TMP"
+trap - EXIT
+
+echo "###############################################################################"
 echo "ИТОГО: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 echo "###############################################################################"
 

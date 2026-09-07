@@ -189,6 +189,40 @@ PYEOF
 }
 check_no_mcp_server
 
+# ADR-028 Д5 (capability `session-only-auth`): литерал KTALK_PERSONAL_API_KEY запрещён как
+# поддерживаемый/рекомендуемый режим авторизации в промт-слое — дословно периметр Scenario
+# «No prompt-layer file names the retired mode as supported». Периметр — ровно README.md,
+# references/, skills/, agents/, commands/, НЕ всё дерево (по образцу check_payload_domain
+# выше, не общего check(), который сканирует `.`): scripts/ легитимно диагностирует сам факт
+# наличия переменной (ktalk-onboard.sh:311 снимает её в чистом окружении, test-onboard.sh
+# подаёт фикстуру), content/ и openspec/ обязаны цитировать литерал как исторический факт о
+# коде пакета (та же ловушка, что уже поймана для внутреннего домена GitLab, ADR-027 Д4), а
+# scripts/test-session-only-auth.sh сам ищет этот литерал как стаб AC-1 — общий блочный check()
+# поймал бы и его собственный текст.
+check_no_retired_auth_literal() {
+    local pattern='KTALK_PERSONAL_API_KEY'
+    local paths=()
+    [ -f "README.md" ] && paths+=("README.md")
+    local d
+    for d in references skills agents commands; do
+        [ -d "$d" ] && paths+=("$d")
+    done
+
+    if [ "${#paths[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    local hits
+    if hits=$(grep -rnF "$pattern" \
+        --exclude-dir=.git \
+        "${paths[@]}" 2>/dev/null); then
+        echo "FAIL: литерал KTALK_PERSONAL_API_KEY найден в промт-слое (ADR-028 Д5 — отставной режим авторизации не должен называться поддерживаемым/рекомендуемым в README.md, references/, skills/, agents/, commands/)"
+        echo "$hits"
+        fail=1
+    fi
+}
+check_no_retired_auth_literal
+
 # NFR-25 (ADR-018 решение 7): правка промт-слоя анализа (agents/, skills/ktalk-registry/,
 # references/ktalk-processor/) без подъёма minor-версии в .claude-plugin/plugin.json —
 # провал. `references/ktalk-processor/` добавлен DEV-103 (ktalk-plugin-igu): коммит 234d79e
