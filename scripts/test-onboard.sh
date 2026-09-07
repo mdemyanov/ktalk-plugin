@@ -684,7 +684,19 @@ check_eq 1 $? "ktalk-processor.md: контракт описан как «тот
 # FAIL при равных base/рабочее дерево версиях (1.13.0/1.13.0) — известное, названное
 # расхождение между этой инструкцией и гейтом, не дефект правки; решение — за координатором,
 # не за исполнителем этой задачи (см. отчёт DEV-002).
-EXPECTED_PROMPT_LAYER_SHA256="e2b256213b715fe1b6025a6d394a00f0c0fba26bdff5962b1a3ba01b34d9c62a"
+#
+# ПЕРЕБАЗИРОВКА 2026-09-08 (плагин 1.14.0 -> 1.15.0, DEV-001, ktalk-plugin-6sm,
+# ADR-028 — единственный режим авторизации). `references/onboarding.md` («## Authorisation»):
+# снят второй режим (`KTALK_PERSONAL_API_KEY`) и правило приоритета, файл токена назван
+# наравне с переменной, `ktalk token set -` назван самим текстом (не отсылкой на README),
+# голое упоминание `.ktalk.toml` доведено до README-раздела, который его объясняет.
+# `skills/ktalk-registry/SKILL.md`: описание вывода `ktalk dashboard --json` дополнено
+# ключом верхнего уровня `last_synced` (GitLab #8). `skills/ktalk-meetings/SKILL.md`
+# («Related commands»): добавлен указатель на команды записей в `ktalk-registry`, без
+# копии таблицы и без `list-archive`/отчёта по участникам (недоступны под единственным
+# оставшимся режимом, RES-001 §2). Minor-версия плагина поднята тем же коммитом (NFR-25)
+# — снимок перебазирован синхронно.
+EXPECTED_PROMPT_LAYER_SHA256="727d65da912123f3287b567b47145a6c994e19e3ebf7823150f842dd01d80ac8"
 ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands references -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
 check_eq "$EXPECTED_PROMPT_LAYER_SHA256" "$ACTUAL_PROMPT_LAYER_SHA256" \
   "AC-1: содержимое skills/+agents/+commands/+references/ не изменилось со снимка (перебазирован на DEV-002, exit code 3) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"

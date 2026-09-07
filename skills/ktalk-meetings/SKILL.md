@@ -245,3 +245,8 @@ not distinguish "exists" from "does not exist" by its response code).
 
 `ktalk sanction grant` is deliberately absent from this table: only the operator runs it, in
 their own terminal, and the skill never calls it under any outcome (NFR-23 point 1).
+
+Recording commands (`list-recordings`, `get-transcript`, `get-summary`, and siblings) are not
+this skill's operations — they are documented in `skills/ktalk-registry/SKILL.md`, alongside the
+registry sync flow. This table is not extended with them to avoid two sources of truth for the
+same command drifting apart (ADR-026).

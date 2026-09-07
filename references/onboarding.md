@@ -133,19 +133,20 @@ documentation.
 
 ## Authorisation
 
-Two modes are supported; the value is held by the environment, not by the plugin:
+The plugin supports exactly one authorisation mode: a browser session token,
+`KTALK_SESSION_TOKEN`.
 
-- `KTALK_PERSONAL_API_KEY` — a personal API key, sent in the `X-Auth-Token` header;
 - `KTALK_SESSION_TOKEN` — a session token, sent in the `sessionToken` parameter.
 
-If both are set, `KTALK_PERSONAL_API_KEY` wins and the session token is not read.
-
-Where to get them: the personal API key — from the user profile in the Kontur Talk interface;
-the session token — from an active web-client session. Where to put them: an environment
-variable of the Claude Code process, or the host project's `settings.json`. The plugin declares
-no MCP server (ADR-022 D1), so there is no `.mcp.json` env block to put them in either the
-plugin's or the host project's tree. **Not** in a file inside the plugin tree, and not in
-`.ktalk.toml`.
+Where to get it: an active web-client session (see README, step 3 `Положите токен`). Where to
+put it: either an environment variable of the Claude Code process, or the token file
+`~/.config/ktalk-mcp/token` (or its `KTALK_TOKEN_FILE` override) — both hold the value equally,
+and `ktalk token set -` (reading the value from stdin) writes the file with `0600` permissions.
+The plugin declares no MCP server (ADR-022 D1), so there is no `.mcp.json` env block to put the
+value in either the plugin's or the host project's tree, and the value never lives in a file
+inside the plugin tree, and never in `.ktalk.toml` (see README, section `Настройка проекта: .ktalk.toml`).
 
 Checking the mode: `ktalk auth-status --json` — it prints the selected mode, never the secret
-value. Never ask for a token value to be pasted into the chat, and never print one.
+value. Never ask for a token value to be pasted into the chat, and never print one. On an
+authorisation failure (an expired or missing token), the remedy is the same command that placed
+the value the first time: `ktalk token set -`.

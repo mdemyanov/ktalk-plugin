@@ -111,7 +111,7 @@ Get the list of new recordings and the statistics:
 ktalk dashboard --json
 ```
 
-Output: `{"new": [{recording_id, name, date, duration_min, ...}], "stats": {...}}`.
+Output: `{"new": [{recording_id, name, date, duration_min, ...}], "stats":{...}, "last_synced": "2026-08-27" | null}` — `last_synced` is a top-level key (not inside `stats`), always present: a calendar date string after the first successful sync, `null` before it.
 
 Show the user a numbered list of new recordings and the statistics:
 
