@@ -133,10 +133,9 @@ documentation.
 
 ## Authorisation
 
-The plugin supports exactly one authorisation mode: a browser session token,
-`KTALK_SESSION_TOKEN`.
+The plugin supports exactly one authorisation mode:
 
-- `KTALK_SESSION_TOKEN` — a session token, sent in the `sessionToken` parameter.
+- `KTALK_SESSION_TOKEN` — a browser session token, sent in the `sessionToken` parameter.
 
 Where to get it: an active web-client session (see README, step 3 `Положите токен`). Where to
 put it: either an environment variable of the Claude Code process, or the token file
