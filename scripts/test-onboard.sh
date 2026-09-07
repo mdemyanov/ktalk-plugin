@@ -696,7 +696,15 @@ check_eq 1 $? "ktalk-processor.md: контракт описан как «тот
 # копии таблицы и без `list-archive`/отчёта по участникам (недоступны под единственным
 # оставшимся режимом, RES-001 §2). Minor-версия плагина поднята тем же коммитом (NFR-25)
 # — снимок перебазирован синхронно.
-EXPECTED_PROMPT_LAYER_SHA256="727d65da912123f3287b567b47145a6c994e19e3ebf7823150f842dd01d80ac8"
+#
+# ПЕРЕБАЗИРОВКА 2026-09-08, раунд 2 (плагин остаётся 1.15.0 — версия уже поднята DEV-001
+# в пределах этого же неопубликованного изменения, CONTRIBUTING.md «Версия плагина и тег
+# релиза», второй подъём не делается; DEV-004, ktalk-plugin-6sm). `references/onboarding.md`
+# («## Authorisation»): снят осиротевший список из одного пункта, дублировавший предложение
+# над ним (TW-001 спроектировал правку, применить не мог — вне мандата на scripts/); факт
+# «значение уходит в параметре `sessionToken`» перенесён в единственный оставшийся бюллет,
+# вводное предложение больше не повторяет «session token» дважды.
+EXPECTED_PROMPT_LAYER_SHA256="0533cf52c0905fb41ab71dd67ae22b492c078213d0a4a027c8f76ee7c5caab5e"
 ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands references -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
 check_eq "$EXPECTED_PROMPT_LAYER_SHA256" "$ACTUAL_PROMPT_LAYER_SHA256" \
   "AC-1: содержимое skills/+agents/+commands/+references/ не изменилось со снимка (перебазирован на DEV-002, exit code 3) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"
