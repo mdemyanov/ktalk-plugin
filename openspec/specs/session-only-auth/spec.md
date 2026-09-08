@@ -23,6 +23,16 @@ explained, and a README that does not name what changed in the currently pinned 
 These are grouped with the authorisation change because they were discovered and are closed in
 the same pass, not because they share a mechanism with it.
 
+A third, unrelated group of Requirements governs how `scripts/ktalk-onboard.sh check` detects
+and reports — but never removes — the retired personal-key mode when it is still set in the
+operator's process environment. `plugin-onboarding-sanctioned-install` keeps owning `check`'s
+package-identity process (installed vs. pinned version, sanction, the TTY barrier); this group
+owns only the detection of the retired authorisation mode itself, because the mode being
+detected is this capability's own subject, not a package-identity concern. `check` does not
+remove the retired variable, does not edit any file that might hold it, and does not read any
+file to look for it — detection, not remediation, and only of the running process's own
+environment.
+
 ## Requirements
 
 ### Requirement: The prompt layer declares exactly one supported authorisation mode
@@ -141,3 +151,75 @@ changes to a version with operator-visible changes.
 - **WHEN** `compat.json` pins a `ktalk-cli` version
 - **THEN** README carries a section naming the operator-visible changes of that version, not
   only the version number
+
+### Requirement: `check` detects the retired mode in the process environment only, never in a file
+
+`scripts/ktalk-onboard.sh check` SHALL detect whether `KTALK_PERSONAL_API_KEY` is set in the
+process environment it runs in. Detection SHALL be limited to that process environment: `check`
+SHALL NOT read a shell startup file (`~/.zshenv`, `~/.bashrc`, `~/.profile`, or any other
+dotfile) and SHALL NOT read a project `.env` file to determine whether the variable is assigned
+there. `check --json` SHALL carry the fact as a dedicated boolean field on every outcome, and
+neither `--json` nor the plain-text message SHALL ever carry the variable's value.
+
+#### Scenario: The fact is named on every outcome, the value never is
+
+- **WHEN** `check` runs, regardless of which other outcome it reports
+- **THEN** `check --json` names whether `KTALK_PERSONAL_API_KEY` is set in its own process
+  environment with a dedicated boolean field, and neither `--json` nor the plain-text message
+  contains the variable's value under any condition
+
+#### Scenario: A variable not yet exported into the running session is not reported
+
+- **WHEN** `KTALK_PERSONAL_API_KEY` is absent from the process environment `check` runs in, but
+  assigned inside a shell startup file or a project `.env` file that has not been sourced or
+  loaded into that same session
+- **THEN** `check` SHALL NOT report the retired mode as detected
+
+### Requirement: Detecting the retired mode is a warning, not a package-readiness failure
+
+When the installed package matches the pin — the condition that would otherwise report `ok` —
+and the retired mode is detected, `check` SHALL report a dedicated outcome, with a dedicated
+non-zero exit code, distinct from every package-readiness outcome (`missing_cli`, `missing_uv`,
+`wrong_package`, `outdated`, `identity_unknown`) and from the internal-error and sanction
+outcomes. This outcome SHALL NOT be presented as a reason to withhold or refuse operations that
+do not depend on the retired variable's priority over the session token — the same warning
+class already established for a version mismatch (`outdated`, "a warning, not a blocker; some
+scenarios may not work") applies here.
+
+#### Scenario: A correctly installed package with the retired mode set is neither `ok` nor a package error
+
+- **WHEN** the installed package matches the pin and `KTALK_PERSONAL_API_KEY` is set in the
+  process environment `check` runs in
+- **THEN** `check` returns its dedicated warning outcome and exit code — not `0`/`ok`, and not
+  one of the package-readiness error outcomes or codes
+
+### Requirement: The reported message names the affected operations and the actual remedy
+
+When the retired mode is detected, `check`'s message SHALL name the specific operations whose
+only working path is the session token (`get-room`, `list-calendar`, `create-meeting`,
+`cancel-meeting`, `search-contacts`) as the ones that fail while the retired mode has priority,
+rather than a generic warning. It SHALL name `unset KTALK_PERSONAL_API_KEY` as the command that
+clears the current shell, and SHALL state that this command does not affect a value assigned in
+a shell startup file or a project `.env` file — finding and editing that file is the operator's
+own action. `check` SHALL NOT perform that edit, offer to perform it, or name a specific file as
+the location of the assignment, since detection does not read any such file and does not know
+whether or where one exists.
+
+#### Scenario: The message names the affected commands, not a generic warning
+
+- **WHEN** `check` reports the retired mode detected
+- **THEN** the message names `get-room`, `list-calendar`, `create-meeting`, `cancel-meeting`,
+  and `search-contacts` explicitly as the operations affected
+
+#### Scenario: The message names the immediate command and does not claim it is permanent
+
+- **WHEN** `check` reports the retired mode detected
+- **THEN** the message names `unset KTALK_PERSONAL_API_KEY` as clearing only the current shell,
+  and states that a shell-startup-file or project-`.env` assignment survives a new terminal or a
+  fresh invocation and is the operator's own action to find and edit
+
+#### Scenario: The plugin does not name a specific file or edit one
+
+- **WHEN** `check` reports the retired mode detected
+- **THEN** no part of the plugin names a specific shell startup file or `.env` file as the
+  location of the assignment, edits any such file, or offers to
