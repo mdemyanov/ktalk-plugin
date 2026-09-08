@@ -227,6 +227,120 @@ release-runbook.md`, раздел «Ломающее изменение: сня�
   `incomplete`) продолжает работать под сессией без изменений — это другая операция с другим
   профилем (RES-001 §2-3), не деградировавшая версия отчёта по участникам.
 
+## Приёмка (BA-002)
+
+Приёмка эпика `ktalk-plugin-6sm` (`main...HEAD`, 26 коммитов, 30 файлов, +2478/−36, HEAD
+`e96ff70`) против `openspec/specs/session-only-auth/spec.md` (9 `### Requirement:`, 10
+`#### Scenario:`) плюс изменённый Scenario «No token value appears in what the plugin controls»
+capability `plugin-onboarding-sanctioned-install` — 11 AC в сумме. Проверено чтением дерева на
+`HEAD` и живыми прогонами этой задачей (`grep`, `bash scripts/test-session-only-auth.sh`, `bash
+scripts/check.sh --full`, `npx -y @fission-ai/openspec@1.8.0 validate --specs --strict`), не по
+самоотчётам QA/SEC — там, где отчёты цитируются, рядом стоит собственная проверка того же факта.
+
+| Requirement / Scenario | Вердикт | Доказательство |
+|---|---|---|
+| The prompt layer declares exactly one supported authorisation mode | принят | `grep -rn "KTALK_PERSONAL_API_KEY" README.md references skills agents commands` — 0 совпадений (проверено этой задачей); `references/onboarding.md:134-151` секция «## Authorisation» называет один бюллет (`KTALK_SESSION_TOKEN`), без фразы о приоритете |
+| The instruction names the token file as a legitimate holder of the value | принят | `README.md:126-131` — «либо в файле `~/.config/ktalk-mcp/token`, либо в переменной… — оба места равноправны»; `references/onboarding.md:142-144` — «both hold the value equally» |
+| The instruction names the actual command that writes the token file | принят | `README.md:130-131,146` и `references/onboarding.md:143,151` называют `ktalk token set -` сами, не отсылкой; `grep -rn "ktalk session" README.md references skills agents commands` — 0 совпадений (проверено этой задачей) |
+| Authorisation-failure guidance points to a single remedy | принят | `README.md:145-147` — «повторите те же два шага: `ktalk token set -`», без личного ключа; `references/onboarding.md:150-151` — тот же единственный путь |
+| Operations without a session profile are not offered | принят | `grep -rni "list-archive\|participants-report" README.md references skills agents commands` — 0 совпадений (проверено этой задачей) |
+| The registry dashboard's output shape is documented completely | принят | `skills/ktalk-registry/SKILL.md:114` — `new`/`stats`/`last_synced` на верхнем уровне, обе формы значения (дата-строка `\|` `null`) |
+| The meetings skill points to where recording commands are documented | принят | `skills/ktalk-meetings/SKILL.md:247-248` — «Recording commands… are documented in `skills/ktalk-registry/SKILL.md`» |
+| A bare cross-file mention of `.ktalk.toml` names where it is explained | принят | `references/onboarding.md:145` — «(see README, section «Настройка проекта: `.ktalk.toml`»)»; раздел с этим названием реально существует в README |
+| README names the operator-visible novelties of the pinned CLI version | принят | `README.md`, раздел «## Что нового в пине `ktalk-cli` 2.1.0» — код возврата `3` у `get-transcript --json` при `identity_check.result == "mismatch"` |
+| No token value appears in what the plugin controls (`plugin-onboarding-sanctioned-install`, изменённый) | принят | `bash scripts/test-session-only-auth.sh` этой задачей — `AC11-1a/AC11-1b/AC11-3` зелёные (фикстура со спецсимволами не попадает в вывод `check`/`check --json`); `AC11-2` — легитимный `SKIP` (`ktalk-onboard.sh check` не отчитывается о состоянии токена вовсе, вне периметра плагина сегодня, зафиксировано `at-design.md` разделом «Не покрывается») |
+
+Собственный прогон этой задачей: `bash scripts/test-session-only-auth.sh` → `PASS=37 FAIL=0
+SKIP=1` (совпадает с QA-002, `test-reports/005-2026-09-08.md`), включая `GUARD-1..6` на сторож
+`check_no_retired_auth_literal`; `bash scripts/check.sh --full` → `EXIT=0`, `check.sh --full —
+passed`, `test-session-only-auth.sh` реально исполняется внутри (см. лог прогона, `▶
+scripts/test-session-only-auth.sh` … `✓`); `npx -y @fission-ai/openspec@1.8.0 validate --specs
+--strict` → `12 passed, 0 failed`, включая `spec/session-only-auth`. `git status --short` на
+`HEAD` — пусто.
+
+**Вердикт по 10 Requirement: pass.** Все девять `### Requirement:` capability и изменённый
+Scenario `plugin-onboarding-sanctioned-install` — приняты безусловно, ничего не принято частично.
+
+### Ломающее изменение — сверка трёх описаний
+
+Раздел обязателен условием приёмки (контракт `breaking-change-guide-contract`); в репозитории
+нет `CHANGELOG.md` и нет `scripts/check-breaking-change-section.py` — автоматический гейт
+неприменим (`✓ n/a` в строке «Breaking-change-guide» ниже), разбор — вручную, сверкой трёх
+независимо написанных описаний одной и той же цены: раздела «Ломающее изменение» этого
+требования (кандидаты 1–2 выше), раздела «Ломающее изменение» рансбука
+`content/70-operations/2026-09-08-session-only-auth-release-runbook.md` (Цена 1–2) и контекста
+ADR-028.
+
+Расхождений не найдено. Разница — в детализации, не в содержании: требование формулирует Кандидат
+1 одним пунктом («личный ключ снят из поддерживаемых»), рансбук делит ту же цену на два
+операционных пункта (Цена 1 — расхождение текста и кода пакета, Цена 2 — ручное обновление при
+истечении) — оба пункта рансбука logически покрыты Кандидатом 1 и «Почему отказ авторизации…»
+требования, не противоречат им. Заявление владельца («личный ключ на его контуре фактически не
+работает») дословно приведено в ADR-028 (Context) и в рансбуке (Цена 1) — оба раза корректно
+квалифицировано как **заявление владельца о своём контуре, не измерение координатора**; само
+требование эту фразу не воспроизводит (она появилась позже, на сессии, зафиксировавшей ADR), но
+и не утверждает обратного — это отсутствие детали, не противоречие. То, что теряет оператор,
+одинаково по существу во всех трёх источниках: постоянный (не истекающий) путь авторизации для
+того, у кого личный ключ был реально настроен и рабочим; `compat.json` не двигается ни в одном
+из трёх текстов; `list-archive`/отчёт по участникам не были обещаны ни до, ни после — во всех
+трёх источниках согласованно.
+
+### SEC-001 — находки бэклога
+
+Аудит `content/70-operations/2026-09-08-session-only-auth-security-audit.md` оставляет Находки 1
+и 3 в бэклоге вердиктом «не блокирует»; Находка 2 закрыта коммитом `2792a77` (подтверждено —
+`grep -n test-session-only-auth .nauta-gates.yaml` называет `projectGates.full`, живой прогон
+`check.sh --full` реально исполняет сьюту).
+
+**Подтверждаю решение по обеим оставшимся находкам властью приёмщика:**
+- **Находка 1 (symlink обходит `check_no_retired_auth_literal`).** Подтверждено чтением
+  `scripts/check-plugin-composition.sh:203-210` — `grep -rnF` без `-R`/dereference. Не блокирует:
+  эксплуатация требует уже имеющегося доступа на коммит в дерево плагина, а при таком доступе
+  проще закоммитить литерал напрямую — сторож защищает от случайного регресса читаемого текста,
+  не от злонамеренного инсайдера с правом коммита; символьных ссылок в дереве сегодня нет
+  (`find README.md references skills agents commands -type l` — пусто, проверено этой задачей).
+  Остаётся в бэклоге.
+- **Находка 3 (openspec-контракт потерял явный запрет места хранения).** Подтверждено —
+  `openspec/specs/session-only-auth/spec.md` действительно не содержит Requirement/Scenario вида
+  «SHALL NOT name a location inside the plugin tree», а прежний текст
+  `plugin-onboarding-sanctioned-install/spec.md` его нёс. Не блокирует: сама проза
+  (`references/onboarding.md:144-145`, «the value never lives in a file inside the plugin tree»)
+  не пострадала и не тестировалась этим ограничением ни до, ни после правки — тестируемость не
+  потеряна, только формальный якорь. Остаётся в бэклоге как задача следующего раунда `session-
+  only-auth`, по рекомендации аудита.
+
+### Периметр эпика — сверка и находка сверх периметра
+
+Согласованный периметр (требование + наблюдения №2, №6, №7, №8 + заявка GitLab #8) выдержан:
+`compat.json` не в диффе (`git diff main...HEAD -- compat.json` — пусто), заявки
+`ktalk-cli#11`–`#14` и GitLab #9 не тронуты нигде в дереве (искал по обеим строкам — совпадений
+кроме собственных упоминаний требования и ADR нет).
+
+**Находка (сверх периметра, не блокирует).** Коммит `f348a38` (DEV-001) добавил во тело статьи
+`content/30-requirements/2026-08-18-onboarding-sanctioned-install.md` блок «Superseded in part» —
+при том что ADR-028 Д4 (тот же эпик, коммит `f3e629b`, предшествующий) буквально постановляет:
+«тело и статус старой статьи не редактируются — отношение зафиксировано здесь [в ADR] и в дельте
+`plugin-onboarding-sanctioned-install/spec.md»… Смена статуса статьи — отдельная задача PM».
+Дельта-спека действительно несёт отношение корректно (проверено —
+`openspec/specs/plugin-onboarding-sanctioned-install/spec.md` дельта в этом диффе), то есть Д4
+исполнена дважды: один раз как предписано (в ADR и в дельта-спеке), второй раз — в самом теле
+FR-28, вопреки собственному тексту Д4. Содержание правки фактически верно и не искажает FR-28
+(текст сохранён дословно, добавлена только пометка со ссылкой), но решение о её месте и о судьбе
+статьи статьи — по Д4 — принадлежит PM, не Dev. **Action item для PM:** ратифицировать правку
+FR-28 задним числом (тогда Д4 нуждается в короткой правке — «за исключением явной пометки со
+ссылкой») либо откатить блок «Superseded in part» из тела FR-28, оставив отношение только в
+ADR-028 и дельта-спеке, как было решено. Не блокирует приёмку 10 Requirement/Scenario этого
+требования — находка о процессе принятия решения по соседней статье, не о содержимом
+capability `session-only-auth`.
+
+### Гейты акцептанс-режима
+
+| Гейт | Статус | Комментарий |
+|---|---|---|
+| Backlog-closure | ✓ n/a | `scripts/check-backlog-closure.py` в дереве нет |
+| Breaking-change-guide | ✓ n/a | `scripts/check-breaking-change-section.py` и `CHANGELOG.md` в дереве нет; содержательный разбор — раздел «Ломающее изменение — сверка трёх описаний» выше, расхождений не найдено |
+| Downstream-test-touch | N/A | в репозитории нет `roadmap.md` и учёта закрытых эпиков — определить принадлежность тронутых тестов «закрытому эпику» не из чего; правка `scripts/test-onboard.sh` в этом диффе — перебазировка снимка sha256 своего же эпика (DEV-001/DEV-004), не тест чужого закрытого эпика |
+
 ## Brief for SA
 
 **Требование:** этот файл
