@@ -46,6 +46,13 @@ JTBD, функциональные и нефункциональные треб�
   внутренний домен, ручной приём issue/PR с публичной стороны (эпик `ktalk-plugin-dhg`)
 - [2026-09-04-dual-channel-delivery/](2026-09-04-dual-channel-delivery/_index.md) — тест-дизайн
   QA-001: покрытие 6 сценариев спеки, стабы `scripts/test-dual-channel-delivery.sh`
+- [2026-09-07-session-only-auth.md](2026-09-07-session-only-auth.md) — единственный режим
+  авторизации: токен браузерной сессии, файл токена наравне с переменной окружения, отказ
+  авторизации без предложения личного ключа, четыре находки боевой сессии 07.09.2026 по точности
+  промт-слоя (эпик `ktalk-plugin-6sm`)
+- [2026-09-07-session-only-auth/](2026-09-07-session-only-auth/_index.md) — тест-дизайн QA-001:
+  покрытие 11 AC (10 сценариев `session-only-auth` + изменённый Scenario
+  `plugin-onboarding-sanctioned-install`), стабы `scripts/test-session-only-auth.sh`
 
 ## Правила
 

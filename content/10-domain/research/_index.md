@@ -9,3 +9,5 @@ title: Исследования
 
 - [2026-08-29-en-prompt-migration-prior-art.md](2026-08-29-en-prompt-migration-prior-art.md) —
   как nauta перевела свой промт-слой на английский: три класса выжившего русского
+- [2026-09-07-cli-2-1-0-auth-modes.md](2026-09-07-cli-2-1-0-auth-modes.md) — источники
+  токена, операции только под session, срок жизни сессии и отказ без токена в ktalk-cli 2.1.0

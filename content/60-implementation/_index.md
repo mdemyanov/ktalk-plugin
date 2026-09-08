@@ -26,6 +26,14 @@ title: Реализация
   у `get-transcript` (сверка идентичности не сошлась, тело ответа полно) в `ktalk-cli` 2.1.0
   (DEV-002, ktalk-plugin-dhg.21); minor-версия плагина НЕ поднята — конфликт с NFR-25, не решён
   исполнителем
+- [2026-09-08-session-only-auth.md](2026-09-08-session-only-auth.md) — единственный режим
+  авторизации (токен сессии), файл токена наравне с переменной, `last_synced` в дашборде
+  (GitLab #8), указатель на команды записей в `ktalk-meetings`, найденный дефект стаба AC10-2
+  (DEV-001, ktalk-plugin-6sm); minor-версия 1.14.0 → 1.15.0
+- [2026-09-08-personal-api-key-literal-guard.md](2026-09-08-personal-api-key-literal-guard.md) —
+  сторож `check-plugin-composition.sh` на литерал `KTALK_PERSONAL_API_KEY` в периметре
+  промт-слоя (ADR-028 Д5), регресс-тест механизма сторожа GUARD-1..GUARD-6 (DEV-002,
+  ktalk-plugin-6sm)
 
 ## Правила
 
