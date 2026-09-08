@@ -53,6 +53,13 @@ JTBD, функциональные и нефункциональные треб�
 - [2026-09-07-session-only-auth/](2026-09-07-session-only-auth/_index.md) — тест-дизайн QA-001:
   покрытие 11 AC (10 сценариев `session-only-auth` + изменённый Scenario
   `plugin-onboarding-sanctioned-install`), стабы `scripts/test-session-only-auth.sh`
+- [2026-09-08-retired-mode-detection.md](2026-09-08-retired-mode-detection.md) — обнаружение
+  отставного режима авторизации `check`: факт в `--json`, предупреждающий код возврата, команда
+  немедленного действия и перечень задетых операций, без устранения и без чтения файлов оболочки
+  (эпик `ktalk-plugin-swm`)
+- [2026-09-08-retired-mode-detection/](2026-09-08-retired-mode-detection/_index.md) — тест-дизайн
+  QA-001: покрытие 6 сценариев трёх новых Requirement спеки, стабы
+  `scripts/test-retired-mode-detection.sh`
 
 ## Правила
 

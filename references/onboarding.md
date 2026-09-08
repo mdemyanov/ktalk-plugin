@@ -86,6 +86,32 @@ and the pinned one explicitly. The remedy is the same command as code 11
 adding a new one, since "the command already points at something else" already covers a
 different package, not only a different version of the same one.
 
+## Code 14 — the retired authorisation mode is set
+
+`check` found the retired authorisation mode's environment variable set in its own process
+environment while the installed package otherwise matches the pin. This is a warning, not a
+package error (ADR-029 D1/D2): work can continue, the same class already established for code
+11 — "a version mismatch is a warning, not a blocker. Some scenarios may not work." Here, five
+operations have no other working path than the session token and fail while this variable has
+priority — `get-room`, `list-calendar`, `create-meeting`, `cancel-meeting`, `search-contacts`.
+Every other operation is unaffected.
+
+Both `check` and `check --json` name the immediate remedy for the *current* shell — clearing the
+variable there — and state plainly that this does not survive a new shell or a fresh
+invocation: an assignment of the same variable in a shell startup file or a project `.env` file
+is unaffected and keeps applying afterwards.
+
+The plugin does not name which shell startup file, if any, carries such an assignment, does not
+read one to find out, and does not edit one — detection itself keeps the same boundary (see
+`check`'s own detection above: process environment only, never a file). Finding and clearing
+that assignment for good, if the operator wants it gone, is the operator's own action over their
+own file, on their own machine — not something this plugin does or offers to do on their behalf.
+
+This outcome never appears when that variable is absent: `check`'s other codes (`0`, `10`-`13`,
+`20`, `30`-`34`) keep exactly the same meaning either way, and package readiness stays
+prioritised over this warning — a package error (codes `10`-`13`/`20`) is still reported on its
+own code even when the variable happens to be set at the same time.
+
 ## Code 34 — the command-name slot is already claimed by the other package
 
 `uv tool install` refused (exit code 2, "Executable already exists") because the other known
