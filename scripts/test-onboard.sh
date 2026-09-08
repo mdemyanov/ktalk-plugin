@@ -704,7 +704,17 @@ check_eq 1 $? "ktalk-processor.md: контракт описан как «тот
 # над ним (TW-001 спроектировал правку, применить не мог — вне мандата на scripts/); факт
 # «значение уходит в параметре `sessionToken`» перенесён в единственный оставшийся бюллет,
 # вводное предложение больше не повторяет «session token» дважды.
-EXPECTED_PROMPT_LAYER_SHA256="0533cf52c0905fb41ab71dd67ae22b492c078213d0a4a027c8f76ee7c5caab5e"
+#
+# ПЕРЕБАЗИРОВКА 2026-09-08, раунд 3 (плагин 1.15.0 -> 1.16.0, DEV-001, ktalk-plugin-swm,
+# ADR-029 — обнаружение отставного режима авторизации без устранения). `references/
+# onboarding.md`: добавлен раздел «## Code 14 — the retired authorisation mode is set» (по
+# образцу соседних разделов «Code 10»-«Code 13») — код возврата предупреждения, пять
+# затронутых операций, немедленная команда `unset` с оговоркой о её непостоянстве; раздел не
+# называет ни один конкретный файл автозапуска оболочки и не предлагает его править (ADR-029
+# Д1/Д2), не называет литерал `KTALK_PERSONAL_API_KEY` описательной фразой, запрещённой Д5
+# ADR-028 (`check_no_retired_auth_literal`). Minor-версия плагина поднята тем же коммитом
+# (NFR-25) — снимок перебазирован синхронно.
+EXPECTED_PROMPT_LAYER_SHA256="fb9db5f124c76fcf2809edb7621f4b0744d670fba5dfb13b162cd36bbb379154"
 ACTUAL_PROMPT_LAYER_SHA256="$(cd "$ROOT" && find skills agents commands references -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | awk '{print $1}')"
 check_eq "$EXPECTED_PROMPT_LAYER_SHA256" "$ACTUAL_PROMPT_LAYER_SHA256" \
   "AC-1: содержимое skills/+agents/+commands/+references/ не изменилось со снимка (перебазирован на DEV-002, exit code 3) — промт-слой не называет конкретный пакет и не дрейфует без подъёма версии"

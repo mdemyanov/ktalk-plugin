@@ -167,6 +167,16 @@ promptLayerSizeBudget:
 # проверяет сам сторож Д5 ADR-028, замерено ~7,4 с — на порядок дороже бюджета fast: (~0,5 с).
 # Не self-referencing: живые вызовы бьют по check-plugin-composition.sh, не по check.sh, и
 # только на изолированной копии ($GUARD_MIRROR), не на $ROOT — рекурсии через projectGates нет.
+#
+# test-retired-mode-detection.sh (DEV-001, ktalk-plugin-swm, QA-001 at-design.md «ОБЯЗАТЕЛЬНОЕ
+# действие Dev») — full:, не fast:, тем же основанием, что оба соседа выше: живые подпроцессы
+# `bash scripts/ktalk-onboard.sh check[--json]` (24 ассерта, часть — с фиктивным `ktalk` на
+# PATH в mktemp -d), замерено `time bash scripts/test-retired-mode-detection.sh` — ~4,2 с
+# (1,77 с user + 1,05 с system), тот же порядок, что у test-session-only-auth.sh (~7,4 с) и на
+# порядок дороже бюджета fast: (~0,5 с). Не self-referencing: живые вызовы бьют по
+# scripts/ktalk-onboard.sh, не по check.sh, рекурсии через projectGates нет. Подключение —
+# явное требование at-design.md (иначе повторяется находка 2 аудита прошлого эпика: зелёная
+# сьюта существует, но гейт её не исполняет).
 projectGates:
   fast:
     - scripts/check-plugin-composition.sh
@@ -178,6 +188,7 @@ projectGates:
     - scripts/test-release-delivery-tails.sh
     - scripts/test-dual-channel-delivery.sh
     - scripts/test-session-only-auth.sh
+    - scripts/test-retired-mode-detection.sh
 
 # branchDiscipline — объявленный, а не выводимый профиль (ADR-025 Д7). Репозиторий уже
 # живёт профилем single практически: одна ветка роли на рабочую копию
