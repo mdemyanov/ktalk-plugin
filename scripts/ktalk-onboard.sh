@@ -21,6 +21,12 @@ SANCTION_FILE="$CONFIG_DIR/onboarding.toml"
 KNOWN_PACKAGE_NAMES=(ktalk-mcp ktalk-cli)
 
 E_OK=0; E_MISSING_CLI=10; E_OUTDATED=11; E_MISSING_UV=12; E_WRONG_PACKAGE=13
+# E_RETIRED_MODE=14 — код 14 (ADR-029 Д1/Д2, BA-001 content/30-requirements/2026-09-08-
+# retired-mode-detection.md, «Почему код возврата 14»): пакет полностью готов (версия
+# совпадает с пином), но в окружении процесса обнаружена переменная отставного режима
+# авторизации — предупреждение, не ошибка готовности пакета, поэтому отдельный код рядом с
+# 10-13, не переиспользует ни один из них.
+E_RETIRED_MODE=14
 E_INTERNAL=20
 E_NO_SANCTION=30; E_INSTALL_FAILED=31; E_NO_UPDATE_SANCTION=32; E_NO_TTY=33
 E_SLOT_COLLISION=34
@@ -189,25 +195,65 @@ report() { # report <status> <installed_pkg> <installed_ver> <pin_pkg> <pin_ver>
   fi
 }
 
+# retired_mode_set — 0, если переменная отставного режима авторизации задана (непусто) в
+# ОКРУЖЕНИИ ЭТОГО ПРОЦЕССА (BA-001 content/30-requirements/2026-09-08-retired-mode-detection.md,
+# «Почему обнаружение — только переменная процесса»; ADR-029 Д1). Не читает ~/.zshenv, любой
+# другой файл автозапуска оболочки и файл .env рабочего каталога — единственный источник
+# истины здесь сама переменная, той же формой `[ -n ... ]`, что называет требование.
+#
+# Форма ниже — дефис без двоеточия перед закрывающей скобкой подстановки, НЕ двоеточие-дефис:
+# обе формы одинаково безопасны под `set -u` для неустановленной переменной (default
+# применяется, когда переменная не установлена — под `-n` дальше пустая/непустая строка не
+# отличаются между формами для этого предиката), но форма с двоеточием сразу после имени
+# переменной матчит паттерн "секрет со значением" `check-plugin-composition.sh` (символ `[:=]`
+# этого паттерна), а форма без двоеточия — нет: следующий за именем переменной символ не `:`/`=`,
+# гейт молчит.
+retired_mode_set() {
+  [ -n "${KTALK_PERSONAL_API_KEY-}" ]
+}
+
+# retired_extra_json <0|1> → JSON-фрагмент нового аддитивного поля report() (кандидат 2, BA-001)
+# — печатается на КАЖДОМ исходе cmd_check (Requirement «check detects the retired mode…»,
+# Scenario «The fact is named on every outcome, the value never is»), не только на исходе,
+# который сам код 14 выделяет отдельно. Имя поля намеренно содержит "retired" (контракт стаба,
+# at-design.md «Контракт имени JSON-поля не зафиксирован SA»).
+retired_extra_json() {
+  if [ "$1" -eq 1 ]; then printf ',"retired_mode_detected":true'; else printf ',"retired_mode_detected":false'; fi
+}
+
+# retired_mode_message <pin_n> <version> <remedy_text> → текст находки кода 14 (BA-001,
+# Requirement «The reported message names the affected operations and the actual remedy»).
+# Называет ровно пять операций спеки (RES-001 §2), команду `unset KTALK_PERSONAL_API_KEY` и
+# оговорку о её непостоянстве — не называет ни один конкретный файл автозапуска оболочки и не
+# предлагает его править (ADR-029 Д1/Д2, Scenario «The plugin does not name a specific file or
+# edit one»).
+retired_mode_message() {
+  local pin_n="$1" ver="$2"
+  printf 'Обнаружена переменная отставного режима авторизации KTALK_PERSONAL_API_KEY в окружении процесса — пакет %s %s установлен и совпадает с пином, это предупреждение, не ошибка готовности пакета. Пять операций не имеют другого рабочего пути, кроме токена сессии, и под этой переменной откажут: get-room, list-calendar, create-meeting, cancel-meeting, search-contacts. Немедленное действие в этой оболочке: unset KTALK_PERSONAL_API_KEY — команда очищает только текущую оболочку и не переживёт новую оболочку или новый запуск; то же присваивание в файле автозапуска оболочки или в .env рабочего каталога, если оно есть, останется как было и продолжит действовать после. check не читает такие файлы, поэтому не знает и не называет, где именно такое присваивание могло бы быть, и не изменяет ни один такой файл — найти и снять его на постоянной основе, если оператор этого хочет, предстоит ему самому.' \
+    "$pin_n" "$ver"
+}
+
 cmd_check() {
-  local pin pin_n remedy_text
+  local pin pin_n remedy_text retired=0 retired_json
+  if retired_mode_set; then retired=1; fi
+  retired_json="$(retired_extra_json "$retired")"
   if ! pin="$(pin_version)"; then
-    report error "" "" "" "" "Не прочитан compat.json плагина — переустановите плагин." ""
+    report error "" "" "" "" "Не прочитан compat.json плагина — переустановите плагин." "" "$retired_json"
     return "$E_INTERNAL"
   fi
   pin_n="$(pin_name)"
   remedy_text="$(remedy_cmd_text "$pin")"
   if ! command -v ktalk >/dev/null 2>&1; then
     if ! command -v uv >/dev/null 2>&1; then
-      report missing_uv "" "" "$pin_n" "$pin" "Не найден uv. Установите uv, затем: $remedy_text" "$remedy_text"
+      report missing_uv "" "" "$pin_n" "$pin" "Не найден uv. Установите uv, затем: $remedy_text" "$remedy_text" "$retired_json"
       return "$E_MISSING_UV"
     fi
-    report missing_cli "" "" "$pin_n" "$pin" "Пакет $pin_n не установлен. Команда установки: $remedy_text" "$remedy_text"
+    report missing_cli "" "" "$pin_n" "$pin" "Пакет $pin_n не установлен. Команда установки: $remedy_text" "$remedy_text" "$retired_json"
     return "$E_MISSING_CLI"
   fi
   if ! installed_identity; then
-    local extra=''
-    if [ "$II_REGISTERED_BOTH" -eq 1 ]; then extra=',"registered_both":true'; fi
+    local extra="$retired_json"
+    if [ "$II_REGISTERED_BOTH" -eq 1 ]; then extra=',"registered_both":true'"$extra"; fi
     report identity_unknown "" "" "$pin_n" "$pin" \
       "Идентичность установленного пакета не распознана штатным способом (ktalk --version и uv tool list). Ремонт: $remedy_text" \
       "$remedy_text" "$extra"
@@ -216,16 +262,23 @@ cmd_check() {
   if ! identity_eq "$II_NAME" "$pin_n"; then
     report wrong_package "$II_NAME" "$II_VERSION" "$pin_n" "$pin" \
       "Установлен пакет $II_NAME ($II_VERSION), а согласно compat.json требуется $pin_n $pin. Ремонт: $remedy_text" \
-      "$remedy_text"
+      "$remedy_text" "$retired_json"
     return "$E_WRONG_PACKAGE"
   fi
   if ! version_eq "$II_VERSION" "$pin"; then
     report outdated "$II_NAME" "$II_VERSION" "$pin_n" "$pin" \
       "Версия пакета (${II_VERSION}) не совпадает с требуемой версией $pin. Ремонт: $remedy_text" \
-      "$remedy_text"
+      "$remedy_text" "$retired_json"
     return "$E_OUTDATED"
   fi
-  report ok "$II_NAME" "$II_VERSION" "$pin_n" "$pin" "Пакет $pin_n $II_VERSION установлен, версия совместима." "$remedy_text"
+  # Готовность пакета приоритетнее находки (BA-001, «Наличие находки не мешает check вернуть
+  # коды 10-13/20/30-34») — этот блок стоит ПОСЛЕ version_eq и ДО report ok (Brief for SA).
+  if [ "$retired" -eq 1 ]; then
+    report retired_mode "$II_NAME" "$II_VERSION" "$pin_n" "$pin" \
+      "$(retired_mode_message "$pin_n" "$II_VERSION")" "$remedy_text" "$retired_json"
+    return "$E_RETIRED_MODE"
+  fi
+  report ok "$II_NAME" "$II_VERSION" "$pin_n" "$pin" "Пакет $pin_n $II_VERSION установлен, версия совместима." "$remedy_text" "$retired_json"
   return "$E_OK"
 }
 
