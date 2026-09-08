@@ -195,6 +195,130 @@ identity`, `pin_version`) для диагностики без записи. Р�
 дополнительный ключ, который ранее не мог ожидать, но и не мог полагаться на его отсутствие
 как на контракт.
 
+## Приёмка (BA-001)
+
+Приёмка эпика `ktalk-plugin-swm` (`main...HEAD`, 11 коммитов, 16 файлов, +1268/−12, HEAD
+`6e8e2c7`) против трёх новых `### Requirement:` (строки 155–227
+`openspec/specs/session-only-auth/spec.md`), их 6 `#### Scenario:`. Проверено чтением дерева на
+`HEAD` и живыми прогонами этой задачей (`bash scripts/test-retired-mode-detection.sh`, два прямых
+вызова `scripts/ktalk-onboard.sh check --json` с переменной и без, `grep` по всему дереву,
+`bash scripts/check.sh --full`, `npx -y @fission-ai/openspec@1.8.0 validate --specs --strict`) —
+не по самоотчёту QA-runner (`test-reports/006-2026-09-08.md`), там, где он цитируется, рядом
+стоит собственная проверка того же факта.
+
+| Requirement / Scenario | Вердикт | Доказательство |
+|---|---|---|
+| `check` detects the retired mode in the process environment only, never in a file — «The fact is named on every outcome, the value never is» | принят | Собственный запуск с именованной фикстурой (`FIXTURE_VALUE="…"; KTALK_PERSONAL_API_KEY="$FIXTURE_VALUE" bash scripts/ktalk-onboard.sh check --json`) → `"retired_mode_detected":true`, `"status":"retired_mode"`, значение фикстуры нигде в выводе; `env -u KTALK_PERSONAL_API_KEY bash scripts/ktalk-onboard.sh check --json` → `"retired_mode_detected":false`, `"status":"ok"` |
+| То же Requirement — «A variable not yet exported into the running session is not reported» | принят | Чтение `scripts/ktalk-onboard.sh:211-213` (`retired_mode_set()` — ровно `[ -n "${KTALK_PERSONAL_API_KEY-}" ]` внутри процесса `check`); `grep -n "zshenv\|bashrc\|profile\|\.env" scripts/ktalk-onboard.sh` — совпадения только в комментариях, описывающих запрет, ни одного вызова чтения такого файла в теле `cmd_check`/`retired_mode_set` |
+| Detecting the retired mode is a warning, not a package-readiness failure — «A correctly installed package with the retired mode set is neither ok nor a package error» | принят | Тот же живой вызов выше — код возврата 14 (`echo $?`), не 0 и не 10–13/20/30–34; чтение `scripts/ktalk-onboard.sh:24-29` — `E_RETIRED_MODE=14`, отдельная константа рядом с `E_MISSING_CLI`…`E_WRONG_PACKAGE`, не переиспользует ни одну |
+| The reported message names the affected operations and the actual remedy — «The message names the affected commands, not a generic warning» | принят | Живой вывод выше — текст `message` называет явно все пять операций (`get-room, list-calendar, create-meeting, cancel-meeting, search-contacts`) |
+| То же Requirement — «The message names the immediate command and does not claim it is permanent» | принят | Тот же вывод — «Немедленное действие в этой оболочке: unset KTALK_PERSONAL_API_KEY… не переживёт новую оболочку или новый запуск; то же присваивание в файле автозапуска оболочки или в .env рабочего каталога… останется как было» |
+| То же Requirement — «The plugin does not name a specific file or edit one» | принят | Тот же вывод — «check не читает такие файлы, поэтому не знает и не называет, где именно такое присваивание могло бы быть, и не изменяет ни один такой файл»; ни один конкретный путь (`~/.zshenv` и т.п.) не назван |
+
+Собственный прогон этой задачей: `bash scripts/test-retired-mode-detection.sh` → `ИТОГО:
+PASS=24 FAIL=0 SKIP=0` (совпадает с QA-002, `test-reports/006-2026-09-08.md`); `bash
+scripts/check.sh --full` → `EXIT=0`, `check.sh --full — passed`, новая сьюта реально исполняется
+внутри (`✓ scripts/test-retired-mode-detection.sh` в логе прогона, подключена в
+`.nauta-gates.yaml` → `projectGates.full`, обязательное действие Dev из `at-design.md`
+исполнено); `npx -y @fission-ai/openspec@1.8.0 validate --specs --strict` → `12 passed, 0
+failed`, включая `spec/session-only-auth`. `git status --short` на `HEAD` — пусто.
+
+**Вердикт по трём Requirement: pass.** Все три `### Requirement:` и их 6 `#### Scenario:` —
+приняты безусловно, ничего не принято частично.
+
+### Красная линия ADR-029 (Д1/Д2) — обнаружение без устранения
+
+Проверено по коду `scripts/ktalk-onboard.sh`, не по тексту раздела «Code 14»:
+
+- **`check` не зовёт `unset` в оболочке оператора и не предлагает это за него.** `grep -n
+  "unset" scripts/ktalk-onboard.sh` — единственное совпадение (`:364`, `run_clean`) внутри
+  подпроцесса-`(...)` очистки секретов перед вызовом менеджера пакетов, не тронуто этим диффом
+  (`git diff main...HEAD -- scripts/ktalk-onboard.sh | grep run_clean` — пусто) и не относится к
+  `cmd_check`/`retired_mode_set`; ни `retired_mode_message()`, ни ветка кода 14 `cmd_check` не
+  выполняют `unset` — они только форматируют строку с текстом команды.
+- **Не читает `~/.zshenv`, `.env` рабочего каталога и другие файлы.** `retired_mode_set()`
+  (строки 211-213) — единственная функция, читающая факт; тело — ровно `[ -n
+  "${KTALK_PERSONAL_API_KEY-}" ]`, без единого обращения к файлу. Живой AC-2b
+  (`test-retired-mode-detection.sh`) подтверждает: переменная, лежащая только в `.env` рабочего
+  каталога вызова, не засчитывается.
+- **Не называет конкретный файл.** `retired_mode_message()` (строки 230-234) — текст говорит
+  «файл автозапуска оболочки» и «.env рабочего каталога» классами, ни одного конкретного пути
+  (`~/.zshenv`, `~/.bashrc` и т.п.) нет ни в самой функции, ни в её живом выводе (проверено выше).
+- **Ничего не правит.** `git diff main...HEAD --stat` — ни один файл вне дерева плагина не
+  затронут по построению (скрипт запускается в дереве плагина и не открывает файлы операторской
+  машины на запись); в самом `cmd_check`/`retired_mode_*` нет ни одного вызова с перенаправлением
+  `>`/`>>`/`sed -i` на что-либо, кроме печати в stdout.
+
+Ни одного перехода решения ADR-029 в реализации не найдено.
+
+### Ломающее изменение — все вызывающие стороны, не только две названные
+
+Раздел обязателен условием приёмки, `N/A` недопустим. В репозитории нет `CHANGELOG.md` и нет
+`scripts/check-breaking-change-section.py` — автоматический гейт неприменим, разбор — вручную.
+
+Требование называет кандидатом новый ненулевой код 14 у `check` и поручает Brief for SA обработку
+в `agents/ktalk-processor.md`/`agents/ktalk-evaluator.md`. Проверка нашла **пять** вызывающих
+`scripts/ktalk-onboard.sh check --json` перед первой операцией контура (`grep -rn
+"ktalk-onboard.sh check" agents/ skills/`), не две:
+
+| Вызывающий | Обработка кода 14 | Достаточно? |
+|---|---|---|
+| `agents/ktalk-processor.md:33` | «Exit code 0 — carry on. A non-zero code — read `references/onboarding.md` and follow it» | да — не хардкодит собственную интерпретацию, делегирует `onboarding.md` |
+| `agents/ktalk-evaluator.md:26` | тот же дословный текст | да, тем же основанием |
+| `skills/ktalk-meetings/SKILL.md:22` | тот же дословный текст | да, тем же основанием |
+| `skills/ktalk-eval/SKILL.md:21` | тот же дословный текст | да, тем же основанием |
+| `skills/ktalk-registry/SKILL.md:23` | тот же дословный текст | да, тем же основанием |
+
+Все пять — не два, названные требованием, — используют идентичную формулу диспетчеризации без
+собственного разбора кода: ни один не трактует «любой ненулевой» как «пакет не готов, не
+продолжать» напрямую в своём тексте, все перекладывают трактовку на
+`references/onboarding.md`. Этот файл действительно несёт новый раздел «## Code 14 — the retired
+authorisation mode is set» (строки 89–113) с формулировкой «work can continue… the same class
+already established for code 11», дословно продолжающей прецедент кода 11. Значит вопрос
+«достаточно ли раздела в `onboarding.md`, или где-то остался вызывающий, для которого 14 значит
+„пакет не готов“» закрывается одним разделом на все пять сегодняшних мест вызова — расхождения
+нет ни в одном.
+
+`README.md:219` тоже упоминает `ktalk-onboard.sh check`, но это инструкция для человека-оператора
+в разделе «Если что-то не работает» — не автоматический диспетчер с собственной интерпретацией
+кода; оператор читает текст находки напрямую, без пере-классификации кодом. Не тот класс
+вызывающего, не требует правки.
+
+Версия плагина поднята один раз: `git log --oneline main..HEAD -- .claude-plugin/plugin.json` —
+один коммит (`847e35c`, DEV-001), `1.15.0` → `1.16.0`, minor, соответствует `CONTRIBUTING.md`
+(«Версия плагина и тег релиза») — правка того же коммита меняет `references/onboarding.md`.
+Формальный периметр сторожа `check_prompt_version_sync` (`agents/`, `skills/ktalk-registry/`,
+`references/ktalk-processor/`) этот файл не покрывает буквально (сам сторож проверено —
+`prompt_diff` по этим трём путям в этом диффе пуст), но бюст версии сделан проактивно и не
+противоречит правилу: гейт не запрещает поднимать minor там, где сам не требует, только не
+допускает пропуск там, где требует. Второго подъёма нет (`grep -c '"version"' git log -p
+main..HEAD -- .claude-plugin/plugin.json` — одно изменение).
+
+### Гейты акцептанс-режима
+
+| Гейт | Статус | Комментарий |
+|---|---|---|
+| Backlog-closure | ✓ n/a | `scripts/check-backlog-closure.py` в дереве нет |
+| Breaking-change-guide | ✓ n/a | `scripts/check-breaking-change-section.py` и `CHANGELOG.md` в дереве нет; содержательный разбор — раздел «Ломающее изменение» выше, расхождений не найдено, все пять вызывающих закрыты одним разделом `onboarding.md` |
+| Downstream-test-touch | N/A | в репозитории нет `roadmap.md` и учёта закрытых эпиков; правка `scripts/test-onboard.sh` в этом диффе — перебазировка снимка sha256 своего же эпика (DEV-001), не тест чужого закрытого эпика |
+
+### Прошлый эпик и периметр — сверка
+
+Находки 1 и 3 аудита `2026-09-08-session-only-auth-security-audit.md` в периметр этого эпика не
+входят и не переоткрыты: `git diff main...HEAD -- scripts/check-plugin-composition.sh
+openspec/specs/plugin-onboarding-sanctioned-install/spec.md` — пусто, реализация этого эпика их
+не задевает. Находка 2 того же аудита (зелёная сьюта существует, но не подключена к гейту) была
+явно поименована в `at-design.md` как «ОБЯЗАТЕЛЬНОЕ действие Dev» и закрыта тем же приёмом:
+`scripts/test-retired-mode-detection.sh` добавлена в `.nauta-gates.yaml` →
+`projectGates.full` (проверено выше, живой прогон `check.sh --full` исполняет сьюту) — та же
+находка не повторена в этом эпике.
+
+Ничего сверх согласованного периметра (три `### Requirement:`, шесть `#### Scenario:`, ADR-029,
+`references/onboarding.md`, `.nauta-gates.yaml`, версия плагина) не найдено:
+`git diff main...HEAD --stat` — 16 файлов, все объяснены выше или тривиальны (`_index.md`
+каталогов, `.nauta-ids.yaml` highwater под выданный ADR-029). Ни один файл вне названного
+периметра не тронут.
+
 ## Brief for SA
 
 **Требование:** этот файл
